@@ -1,5 +1,6 @@
 package com.fasa70.bettertouchpad.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -10,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -39,7 +41,7 @@ fun SettingsScreen(repo: SettingsRepository) {
         FeatureSwitch("单指单击 (鼠标左键)", settings.singleFingerTap) {
             repo.update { copy(singleFingerTap = it) }
         }
-        FeatureSwitch("按下触控板 (鼠标左键/长按)", settings.physicalClick) {
+        FeatureSwitch("按下触控板 (鼠标左键)", settings.physicalClick) {
             repo.update { copy(physicalClick = it) }
         }
         FeatureSwitch("轻触两下以拖移", settings.doubleTapDrag) {
@@ -51,10 +53,13 @@ fun SettingsScreen(repo: SettingsRepository) {
         FeatureSwitch("双指划动 (滚轮)", settings.twoFingerScroll) {
             repo.update { copy(twoFingerScroll = it) }
         }
-        FeatureSwitch("双指边缘内划 (注入触摸)", settings.edgeSwipe) {
+        FeatureSwitch("自然滚动 (内容滚动方向与手指方向一致)", settings.naturalScroll) {
+            repo.update { copy(naturalScroll = it) }
+        }
+        FeatureSwitch("双指边缘内划 (返回上一级)", settings.edgeSwipe) {
             repo.update { copy(edgeSwipe = it) }
         }
-        FeatureSwitch("三指移动 (注入三点触摸)", settings.threeFingerMove) {
+        FeatureSwitch("三指手势 (返回桌面/截图/分屏)", settings.threeFingerMove) {
             repo.update { copy(threeFingerMove = it) }
         }
 
@@ -77,11 +82,8 @@ fun SettingsScreen(repo: SettingsRepository) {
             onValueChange = { repo.update { copy(scrollSensitivity = it) } },
             onDone = { focusManager.clearFocus() }
         )
-        FeatureSwitch("自然滚动 (手指方向与内容方向一致)", settings.naturalScroll) {
-            repo.update { copy(naturalScroll = it) }
-        }
         SensitivityRow(
-            label = "触摸注入速度",
+            label = "触摸注入灵敏度（影响双指边缘內划和三指手势）",
             value = settings.touchInjectSpeed,
             range = 0.01f..3.0f,
             onValueChange = { repo.update { copy(touchInjectSpeed = it) } },
@@ -114,7 +116,7 @@ fun SettingsScreen(repo: SettingsRepository) {
         Text("触控板坐标范围 (兼容性设置)", fontSize = 18.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 4.dp))
         Text(
-            "自定义触控板的最大坐标值以兼容不同设备。\n默认值适用于 Xiaomi Touch (28790 × 17990)。",
+            "自定义触控板的最大坐标值以兼容不同设备。\n默认值 (2879 × 1799)。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -136,6 +138,30 @@ fun SettingsScreen(repo: SettingsRepository) {
         )
 
         Spacer(modifier = Modifier.height(32.dp))
+
+        // Footer: centered small attribution + GitHub link
+        val uriHandler = LocalUriHandler.current
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "by 风洒青泥",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "github",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable {
+                    uriHandler.openUri("https://github.com/fasa70/BetterTouchpad")
+                }
+            )
+        }
     }
 }
 
@@ -235,4 +261,3 @@ private fun CoordInput(label: String, value: String, onValueChange: (String) -> 
             .padding(vertical = 4.dp)
     )
 }
-

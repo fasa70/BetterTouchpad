@@ -16,24 +16,27 @@ data class TouchpadSettings(
     val twoFingerScroll: Boolean = true,
     val edgeSwipe: Boolean = true,
     val threeFingerMove: Boolean = true,
-    val naturalScroll: Boolean = false,
+    val naturalScroll: Boolean = true,
 
     // Sensitivities
-    val cursorSensitivity: Float = 1.5f,
-    val scrollSensitivity: Float = 1.0f,
+    val cursorSensitivity: Float = 0.7f,
+    val scrollSensitivity: Float = 0.5f,
     val touchInjectSpeed: Float = 1.0f,
 
     // Touchpad coordinate range (customizable for device compatibility)
-    val padMaxX: Int = 28790,
-    val padMaxY: Int = 17990,
+    val padMaxX: Int = 2879,
+    val padMaxY: Int = 1799,
 
     // Edge swipe threshold (fraction of padMaxX, 0.0~1.0)
     val edgeThreshold: Float = 0.08f,
 
     // Axis correction for injected touch (2-finger & 3-finger gestures)
-    val swapAxes: Boolean = false,
+    val swapAxes: Boolean = true,
     val invertX: Boolean = false,
-    val invertY: Boolean = false
+    val invertY: Boolean = true,
+
+    // Double-tap drag interval (ms): max time between first tap-up and second tap-down
+    val doubleTapIntervalMs: Int = 150
 )
 
 class SettingsRepository(context: Context) {
@@ -61,16 +64,17 @@ class SettingsRepository(context: Context) {
         twoFingerScroll     = prefs.getBoolean("twoFingerScroll", true),
         edgeSwipe           = prefs.getBoolean("edgeSwipe", true),
         threeFingerMove     = prefs.getBoolean("threeFingerMove", true),
-        naturalScroll       = prefs.getBoolean("naturalScroll", false),
-        cursorSensitivity   = prefs.getFloat("cursorSensitivity", 1.5f),
-        scrollSensitivity   = prefs.getFloat("scrollSensitivity", 1.0f),
+        naturalScroll       = prefs.getBoolean("naturalScroll", true),
+        cursorSensitivity   = prefs.getFloat("cursorSensitivity", 0.7f),
+        scrollSensitivity   = prefs.getFloat("scrollSensitivity", 0.5f),
         touchInjectSpeed    = prefs.getFloat("touchInjectSpeed", 1.0f),
-        padMaxX             = prefs.getInt("padMaxX", 28790),
-        padMaxY             = prefs.getInt("padMaxY", 17990),
+        padMaxX             = prefs.getInt("padMaxX", 2879),
+        padMaxY             = prefs.getInt("padMaxY", 1799),
         edgeThreshold       = prefs.getFloat("edgeThreshold", 0.08f),
-        swapAxes            = prefs.getBoolean("swapAxes", false),
+        swapAxes            = prefs.getBoolean("swapAxes", true),
         invertX             = prefs.getBoolean("invertX", false),
-        invertY             = prefs.getBoolean("invertY", false)
+        invertY             = prefs.getBoolean("invertY", true),
+        doubleTapIntervalMs = prefs.getInt("doubleTapIntervalMs", 150)
     )
 
     private fun save(s: TouchpadSettings) {
@@ -93,6 +97,7 @@ class SettingsRepository(context: Context) {
             putBoolean("swapAxes", s.swapAxes)
             putBoolean("invertX", s.invertX)
             putBoolean("invertY", s.invertY)
+            putInt("doubleTapIntervalMs", s.doubleTapIntervalMs)
         }.apply()
     }
 }
