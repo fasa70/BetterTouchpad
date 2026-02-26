@@ -95,7 +95,7 @@ fun SettingsScreen(repo: SettingsRepository) {
         Text("触摸注入方向校正", fontSize = 18.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 4.dp))
         Text(
-            "当双指/三指手势注入的触摸方向不正确时，使用以下选项进行修正。",
+            "当双指/三指手势注入的触摸方向不正确时，使用以下选项进行修正。\n默认开启xy轴对调和反转y轴",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -116,7 +116,7 @@ fun SettingsScreen(repo: SettingsRepository) {
         Text("兼容性设置", fontSize = 18.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 4.dp))
         Text(
-            "开启后，程序启动时自动获取触控板设备路径及坐标最大值\n如无法程序未能正常运行，可尝试关闭此选项",
+            "开启后，程序启动时自动获取触控板设备路径及坐标最大值\n如程序未能正常运行，可尝试关闭此选项",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -125,6 +125,18 @@ fun SettingsScreen(repo: SettingsRepository) {
         FeatureSwitch("自动匹配触控板设备路径和坐标值范围", settings.autoDetectDevice) {
             repo.update { copy(autoDetectDevice = it) }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        FeatureSwitch("独占设备 (EVIOCGRAB)", settings.exclusiveGrab) {
+            repo.update { copy(exclusiveGrab = it) }
+        }
+        Text(
+            "开启后，触控板输入事件将被本应用独占，系统其他进程无法读取，以防止跟系统手势产生冲突。\n如过键盘连接异常，可尝试关闭此选项。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
 
         if (!settings.autoDetectDevice) {
             Spacer(modifier = Modifier.height(4.dp))

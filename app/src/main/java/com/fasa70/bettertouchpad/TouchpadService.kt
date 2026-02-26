@@ -170,9 +170,13 @@ class TouchpadService : Service() {
                     return@launch
                 }
 
-                // Step 3: Grab device exclusively (best-effort)
-                val grabbed = NativeBridge.grabDevice(evdevFd)
-                Log.i(TAG, "Device grab result: $grabbed")
+                // Step 3: Grab device exclusively (best-effort, only if enabled)
+                if (settings.get().exclusiveGrab) {
+                    val grabbed = NativeBridge.grabDevice(evdevFd)
+                    Log.i(TAG, "Device grab result: $grabbed")
+                } else {
+                    Log.i(TAG, "Exclusive grab disabled by user setting, skipping EVIOCGRAB")
+                }
 
                 // Step 4: Ensure /dev/uinput is accessible, create virtual mouse
                 runShellAsRoot("chmod 666 /dev/uinput 2>/dev/null; echo OK")
