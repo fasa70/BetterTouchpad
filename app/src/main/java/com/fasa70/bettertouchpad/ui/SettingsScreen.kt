@@ -111,23 +111,66 @@ fun SettingsScreen(repo: SettingsRepository) {
             repo.update { copy(invertY = it) }
         }
 
-        // ── Touchpad coordinate range ─────────────────────────────────────
+        // ── Auto-detect device ────────────────────────────────────────────
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-        Text("触控板坐标范围 (兼容性设置)", fontSize = 18.sp, fontWeight = FontWeight.Bold,
+        Text("兼容性设置", fontSize = 18.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 4.dp))
         Text(
-            "自定义触控板的最大坐标值以兼容不同设备。\n默认值 (2879 × 1799)。",
+            "开启后，程序启动时自动获取触控板设备路径及坐标最大值\n如无法程序未能正常运行，可尝试关闭此选项",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        CoordInput("X 轴最大值", settings.padMaxX.toString()) { v ->
-            v.toIntOrNull()?.takeIf { it > 0 }?.let { repo.update { copy(padMaxX = it) } }
+        FeatureSwitch("自动匹配触控板设备路径和坐标值范围", settings.autoDetectDevice) {
+            repo.update { copy(autoDetectDevice = it) }
         }
-        CoordInput("Y 轴最大值", settings.padMaxY.toString()) { v ->
-            v.toIntOrNull()?.takeIf { it > 0 }?.let { repo.update { copy(padMaxY = it) } }
+
+        if (!settings.autoDetectDevice) {
+            Spacer(modifier = Modifier.height(4.dp))
+            // Device path input
+            var devicePathText by remember(settings.devicePath) { mutableStateOf(settings.devicePath) }
+            OutlinedTextField(
+                value = devicePathText,
+                onValueChange = { devicePathText = it },
+                label = { Text("设备路径（如 /dev/input/event5）") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    if (devicePathText.isNotBlank()) repo.update { copy(devicePath = devicePathText.trim()) }
+                    focusManager.clearFocus()
+                }),
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            )
+
+            // Coordinate range inputs
+            Text(
+                "触控板坐标最大值",
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
+            )
+            CoordInput("X 轴最大值", settings.padMaxX.toString()) { v ->
+                v.toIntOrNull()?.takeIf { it > 0 }?.let { repo.update { copy(padMaxX = it) } }
+            }
+            CoordInput("Y 轴最大值", settings.padMaxY.toString()) { v ->
+                v.toIntOrNull()?.takeIf { it > 0 }?.let { repo.update { copy(padMaxY = it) } }
+            }
+        } else {
+            // Show detected values as read-only info when auto-detect is on
+            Text(
+                "当前设备路径：${settings.devicePath}\n坐标最大值：X=${settings.padMaxX}  Y=${settings.padMaxY}\n（启动服务后自动更新）",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
         }
+
+        // ── Edge threshold ────────────────────────────────────────────────
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+        Text("其他设置", fontSize = 18.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 4.dp))
 
         SensitivityRow(
             label = "边缘触发区域宽度 (占X轴比例)",
@@ -154,7 +197,7 @@ fun SettingsScreen(repo: SettingsRepository) {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "github",
+                text = "觉得好用的话别忘了在github上给我点个star⭐~",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.clickable {

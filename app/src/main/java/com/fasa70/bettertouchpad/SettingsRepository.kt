@@ -7,6 +7,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class TouchpadSettings(
+    // Auto-detect touchpad device path and coordinate range
+    val autoDetectDevice: Boolean = true,
+    val devicePath: String = "/dev/input/event5",
+
     // Feature toggles
     val singleFingerMove: Boolean = true,
     val singleFingerTap: Boolean = true,
@@ -28,7 +32,7 @@ data class TouchpadSettings(
     val padMaxY: Int = 1799,
 
     // Edge swipe threshold (fraction of padMaxX, 0.0~1.0)
-    val edgeThreshold: Float = 0.08f,
+    val edgeThreshold: Float = 0.1f,
 
     // Axis correction for injected touch (2-finger & 3-finger gestures)
     val swapAxes: Boolean = true,
@@ -56,6 +60,8 @@ class SettingsRepository(context: Context) {
     }
 
     private fun load() = TouchpadSettings(
+        autoDetectDevice    = prefs.getBoolean("autoDetectDevice", true),
+        devicePath          = prefs.getString("devicePath", "/dev/input/event5") ?: "/dev/input/event5",
         singleFingerMove    = prefs.getBoolean("singleFingerMove", true),
         singleFingerTap     = prefs.getBoolean("singleFingerTap", true),
         physicalClick       = prefs.getBoolean("physicalClick", true),
@@ -70,7 +76,7 @@ class SettingsRepository(context: Context) {
         touchInjectSpeed    = prefs.getFloat("touchInjectSpeed", 1.0f),
         padMaxX             = prefs.getInt("padMaxX", 2879),
         padMaxY             = prefs.getInt("padMaxY", 1799),
-        edgeThreshold       = prefs.getFloat("edgeThreshold", 0.08f),
+        edgeThreshold       = prefs.getFloat("edgeThreshold", 0.1f),
         swapAxes            = prefs.getBoolean("swapAxes", true),
         invertX             = prefs.getBoolean("invertX", false),
         invertY             = prefs.getBoolean("invertY", true),
@@ -79,6 +85,8 @@ class SettingsRepository(context: Context) {
 
     private fun save(s: TouchpadSettings) {
         prefs.edit().apply {
+            putBoolean("autoDetectDevice", s.autoDetectDevice)
+            putString("devicePath", s.devicePath)
             putBoolean("singleFingerMove", s.singleFingerMove)
             putBoolean("singleFingerTap", s.singleFingerTap)
             putBoolean("physicalClick", s.physicalClick)

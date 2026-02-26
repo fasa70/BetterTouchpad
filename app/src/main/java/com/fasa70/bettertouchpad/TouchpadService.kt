@@ -69,7 +69,38 @@ class TouchpadService : Service() {
                 val helperFile = deployHelper()
                 Log.i(TAG, "Helper path: ${helperFile?.absolutePath}, exists=${helperFile?.exists()}")
 
-                val evdevPath = settings.get().let { "/dev/input/event5" }
+                val evdevPath: String
+                val detectedMaxX: Int
+                val detectedMaxY: Int
+
+                val s = settings.get()
+                if (s.autoDetectDevice) {
+                    Log.i(TAG, "Auto-detecting touchpad device via getevent -p ...")
+                    val detected = detectTouchpadDevice()
+                    if (detected != null) {
+                        evdevPath = detected.first
+                        detectedMaxX = detected.second
+                        detectedMaxY = detected.third
+                        // Persist detected coords if they differ from stored
+                        if (detectedMaxX > 0 && detectedMaxY > 0 &&
+                            (detectedMaxX != s.padMaxX || detectedMaxY != s.padMaxY || evdevPath != s.devicePath)) {
+                            settings.update {
+                                copy(devicePath = evdevPath, padMaxX = detectedMaxX, padMaxY = detectedMaxY)
+                            }
+                        }
+                        Log.i(TAG, "Auto-detected: path=$evdevPath maxX=$detectedMaxX maxY=$detectedMaxY")
+                    } else {
+                        // Fallback to saved values
+                        evdevPath = s.devicePath
+                        detectedMaxX = s.padMaxX
+                        detectedMaxY = s.padMaxY
+                        Log.w(TAG, "Auto-detect failed, falling back to saved path: $evdevPath")
+                    }
+                } else {
+                    evdevPath = s.devicePath
+                    detectedMaxX = s.padMaxX
+                    detectedMaxY = s.padMaxY
+                }
 
                 // Step 1: Try using root helper via SCM_RIGHTS fd passing
                 // This bypasses SELinux because the fd is opened by root
@@ -212,6 +243,70 @@ class TouchpadService : Service() {
             dstFile
         } catch (e: Exception) {
             Log.e(TAG, "deployHelper failed: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Runs "getevent -p" as root and parses the output to find a touchpad device.
+     * Looks for devices named "Xiaomi Touch" first; falls back to any device with
+     * INPUT_PROP_POINTER that has ABS_X (0000) and ABS_Y (0001) axes.
+     *
+     * Returns Triple(path, maxX, maxY) or null on failure.
+     */
+    private fun detectTouchpadDevice(): Triple<String, Int, Int>? {
+        return try {
+            val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", "getevent -p"))
+            val output = proc.inputStream.bufferedReader().readText()
+            proc.waitFor()
+
+            // Parse blocks separated by "add device N: /dev/input/eventX"
+            val deviceRegex = Regex("""add device \d+: (/dev/input/\S+)""")
+            val nameRegex   = Regex("""name:\s+"(.+)"""")
+            val absAxisRegex = Regex("""(\w{4})\s+: value \d+, min \d+, max (\d+)""")
+            val propPointerRegex = Regex("""INPUT_PROP_POINTER""")
+
+            data class DeviceInfo(
+                val path: String,
+                val name: String,
+                val absAxes: Map<String, Int>,   // code -> max
+                val hasPropPointer: Boolean
+            )
+
+            val devices = mutableListOf<DeviceInfo>()
+            val blocks = output.split(Regex("(?=add device \\d+:)")).filter { it.isNotBlank() }
+
+            for (block in blocks) {
+                val pathMatch = deviceRegex.find(block) ?: continue
+                val path = pathMatch.groupValues[1]
+                val name = nameRegex.find(block)?.groupValues?.get(1) ?: ""
+                val axisMap = mutableMapOf<String, Int>()
+                for (axisMatch in absAxisRegex.findAll(block)) {
+                    axisMap[axisMatch.groupValues[1]] = axisMatch.groupValues[2].toIntOrNull() ?: 0
+                }
+                val hasProp = propPointerRegex.containsMatchIn(block)
+                devices.add(DeviceInfo(path, name, axisMap, hasProp))
+            }
+
+            // Priority 1: named "Xiaomi Touch"
+            var candidate = devices.firstOrNull { it.name == "Xiaomi Touch" }
+            // Priority 2: any INPUT_PROP_POINTER device with ABS_X and ABS_Y
+            if (candidate == null) {
+                candidate = devices.firstOrNull { it.hasPropPointer && it.absAxes.containsKey("0000") && it.absAxes.containsKey("0001") }
+            }
+            // Priority 3: any device with ABS_MT_POSITION_X (0035) and ABS_MT_POSITION_Y (0036)
+            if (candidate == null) {
+                candidate = devices.firstOrNull { it.absAxes.containsKey("0035") && it.absAxes.containsKey("0036") }
+            }
+
+            candidate?.let { dev ->
+                // Prefer MT axes (0035/0036), fall back to regular ABS_X/ABS_Y (0000/0001)
+                val maxX = dev.absAxes["0035"] ?: dev.absAxes["0000"] ?: 0
+                val maxY = dev.absAxes["0036"] ?: dev.absAxes["0001"] ?: 0
+                if (maxX > 0 && maxY > 0) Triple(dev.path, maxX, maxY) else null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "detectTouchpadDevice failed: ${e.message}")
             null
         }
     }
