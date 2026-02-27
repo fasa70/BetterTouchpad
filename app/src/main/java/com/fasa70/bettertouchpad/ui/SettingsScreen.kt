@@ -50,7 +50,7 @@ fun SettingsScreen(repo: SettingsRepository) {
         FeatureSwitch("双指单击 (鼠标右键)", settings.twoFingerTap) {
             repo.update { copy(twoFingerTap = it) }
         }
-        FeatureSwitch("双指划动 (滚轮)", settings.twoFingerScroll) {
+        FeatureSwitch("双指划动 (鼠标滚轮)", settings.twoFingerScroll) {
             repo.update { copy(twoFingerScroll = it) }
         }
         FeatureSwitch("自然滚动 (内容滚动方向与手指方向一致)", settings.naturalScroll) {
@@ -62,6 +62,12 @@ fun SettingsScreen(repo: SettingsRepository) {
         FeatureSwitch("三指手势 (返回桌面/截图/分屏)", settings.threeFingerMove) {
             repo.update { copy(threeFingerMove = it) }
         }
+        Text(
+            "三指上划-返回桌面；三指上划并横向划动-快切应用；三指下划-截图；三指横划-快捷分屏",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
 
         // ── Sensitivity ───────────────────────────────────────────────────
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
@@ -90,6 +96,62 @@ fun SettingsScreen(repo: SettingsRepository) {
             onDone = { focusManager.clearFocus() }
         )
 
+        // ── Edge threshold ────────────────────────────────────────────────
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+        Text("其他设置", fontSize = 18.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 4.dp))
+
+        SensitivityRow(
+            label = "边缘触发区域宽度 (占X轴比例)",
+            value = settings.edgeThreshold,
+            range = 0.01f..0.30f,
+            onValueChange = { repo.update { copy(edgeThreshold = it) } },
+            onDone = { focusManager.clearFocus() }
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Double-tap drag interval
+        Text("双击拖移间隔时间 (ms)", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Slider(
+                value = settings.doubleTapIntervalMs.toFloat(),
+                onValueChange = { repo.update { copy(doubleTapIntervalMs = it.toInt()) } },
+                valueRange = 10f..500f,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            var dtText by remember(settings.doubleTapIntervalMs) { mutableStateOf(settings.doubleTapIntervalMs.toString()) }
+            OutlinedTextField(
+                value = dtText,
+                onValueChange = { dtText = it },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(onDone = {
+                    dtText.toIntOrNull()?.takeIf { it in 50..500 }?.let {
+                        repo.update { copy(doubleTapIntervalMs = it) }
+                    }
+                    focusManager.clearFocus()
+                }),
+                singleLine = true,
+                modifier = Modifier.width(88.dp),
+                textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
+            )
+        }
+        Text(
+            "两次点击间隔不超过此时间时，触发双击拖移",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
         // ── Axis correction ───────────────────────────────────────────────
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
         Text("触摸注入方向校正", fontSize = 18.sp, fontWeight = FontWeight.Bold,
@@ -115,18 +177,6 @@ fun SettingsScreen(repo: SettingsRepository) {
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
         Text("兼容性设置", fontSize = 18.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 4.dp))
-        Text(
-            "开启后，程序启动时自动获取触控板设备路径及坐标最大值\n如程序未能正常运行，可尝试关闭此选项",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        FeatureSwitch("自动匹配触控板设备路径和坐标值范围", settings.autoDetectDevice) {
-            repo.update { copy(autoDetectDevice = it) }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         FeatureSwitch("独占设备 (EVIOCGRAB)", settings.exclusiveGrab) {
             repo.update { copy(exclusiveGrab = it) }
@@ -136,6 +186,18 @@ fun SettingsScreen(repo: SettingsRepository) {
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        FeatureSwitch("自动匹配触控板设备路径和坐标值范围", settings.autoDetectDevice) {
+            repo.update { copy(autoDetectDevice = it) }
+        }
+        Text(
+            "开启后，程序启动时自动获取触控板设备路径及坐标最大值\n如程序未能正常运行，可尝试关闭此选项",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
         )
 
         if (!settings.autoDetectDevice) {
@@ -178,21 +240,6 @@ fun SettingsScreen(repo: SettingsRepository) {
                 modifier = Modifier.padding(vertical = 4.dp)
             )
         }
-
-        // ── Edge threshold ────────────────────────────────────────────────
-        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-        Text("其他设置", fontSize = 18.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 4.dp))
-
-        SensitivityRow(
-            label = "边缘触发区域宽度 (占X轴比例)",
-            value = settings.edgeThreshold,
-            range = 0.01f..0.30f,
-            onValueChange = { repo.update { copy(edgeThreshold = it) } },
-            onDone = { focusManager.clearFocus() }
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
 
         // Footer: centered small attribution + GitHub link
         val uriHandler = LocalUriHandler.current

@@ -40,7 +40,7 @@ data class TouchpadSettings(
     val invertY: Boolean = true,
 
     // Double-tap drag interval (ms): max time between first tap-up and second tap-down
-    val doubleTapIntervalMs: Int = 150,
+    val doubleTapIntervalMs: Int = 100,
 
     // Exclusively grab the input device (EVIOCGRAB); disable on devices where it causes issues
     val exclusiveGrab: Boolean = true
@@ -83,7 +83,7 @@ class SettingsRepository(context: Context) {
         swapAxes            = prefs.getBoolean("swapAxes", true),
         invertX             = prefs.getBoolean("invertX", false),
         invertY             = prefs.getBoolean("invertY", true),
-        doubleTapIntervalMs = prefs.getInt("doubleTapIntervalMs", 150),
+        doubleTapIntervalMs = prefs.getInt("doubleTapIntervalMs", 100),
         exclusiveGrab       = prefs.getBoolean("exclusiveGrab", true)
     )
 
