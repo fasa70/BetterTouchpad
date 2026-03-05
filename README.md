@@ -112,7 +112,7 @@ BetterTouchpad 是一个运行在 Android 设备上的 **Root 级 Native 守护�
 ## 使用要求  
   
 - Android 设备需已获取 **Root 权限**  
-- 目前主要适配**小米平板**带触控板的设备（触控板设备名为 `Xiaomi Touch`）  
+- 目前主要适配**小米平板**带触控板的设备（触控板设备名为 `Xiaomi Touch`），如其他设备无法使用，请在项目的 Issues 页面提交一个新的 Issue。
   
 ---  
   
