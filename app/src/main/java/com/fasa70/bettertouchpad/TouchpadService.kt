@@ -12,6 +12,7 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
+import com.fasa70.bettertouchpad.system.NavigationBarThreeFingerAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -207,7 +208,15 @@ class TouchpadService : Service() {
                 }
 
                 // Step 6: Attach gesture recognizer callback
-                val recognizer = GestureRecognizer(settings, mouseFd, touchFd, w, h)
+                val threeFingerAdapter = NavigationBarThreeFingerAdapter(touchFd, w, h)
+                val recognizer = GestureRecognizer(
+                    settings = settings,
+                    mouseFd = mouseFd,
+                    touchFd = touchFd,
+                    screenWidth = w,
+                    screenHeight = h,
+                    threeFingerAdapter = threeFingerAdapter
+                )
                 NativeBridge.setCallback(recognizer)
 
                 // Step 7: Run blocking event loop

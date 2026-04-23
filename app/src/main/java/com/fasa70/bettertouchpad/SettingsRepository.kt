@@ -20,6 +20,7 @@ data class TouchpadSettings(
     val twoFingerScroll: Boolean = true,
     val edgeSwipe: Boolean = true,
     val threeFingerMove: Boolean = true,
+    val threeFingerMiddleClick: Boolean = true,
     val naturalScroll: Boolean = true,
 
     // Sensitivities
@@ -73,6 +74,7 @@ class SettingsRepository(context: Context) {
         twoFingerScroll     = prefs.getBoolean("twoFingerScroll", true),
         edgeSwipe           = prefs.getBoolean("edgeSwipe", true),
         threeFingerMove     = prefs.getBoolean("threeFingerMove", true),
+        threeFingerMiddleClick = prefs.getBoolean("threeFingerMiddleClick", true),
         naturalScroll       = prefs.getBoolean("naturalScroll", true),
         cursorSensitivity   = prefs.getFloat("cursorSensitivity", 0.7f),
         scrollSensitivity   = prefs.getFloat("scrollSensitivity", 0.5f),
@@ -99,6 +101,7 @@ class SettingsRepository(context: Context) {
             putBoolean("twoFingerScroll", s.twoFingerScroll)
             putBoolean("edgeSwipe", s.edgeSwipe)
             putBoolean("threeFingerMove", s.threeFingerMove)
+            putBoolean("threeFingerMiddleClick", s.threeFingerMiddleClick)
             putBoolean("naturalScroll", s.naturalScroll)
             putFloat("cursorSensitivity", s.cursorSensitivity)
             putFloat("scrollSensitivity", s.scrollSensitivity)
