@@ -1,5 +1,6 @@
 package com.fasa70.bettertouchpad.system
 
+import android.util.Log
 import com.fasa70.bettertouchpad.NativeBridge
 import com.fasa70.bettertouchpad.TouchpadSettings
 import kotlin.math.abs
@@ -7,6 +8,8 @@ import kotlin.math.abs
 private enum class ThreeDir {
     UP, DOWN, LEFT, RIGHT
 }
+
+private const val TAG = "ThreeFingerNavAdapter"
 
 class NavigationBarThreeFingerAdapter(
     private val touchFd: Int,
@@ -32,6 +35,7 @@ class NavigationBarThreeFingerAdapter(
         consumed = false
         navInjected = false
         downModeInjected = false
+        Log.d(TAG, "three-finger start: trackingBase=$trackingBase")
     }
 
     override fun onGestureMove(settings: TouchpadSettings, nowMs: Long, rawDispDx: Int, rawDispDy: Int) {
@@ -39,7 +43,9 @@ class NavigationBarThreeFingerAdapter(
 
         if (direction == null) {
             direction = detectDirection(rawDispDx, rawDispDy)
-            if (direction != null) consumed = true
+            // if (direction != null) {
+            //     Log.d(TAG, "direction locked: dir=$direction rawDx=$rawDispDx rawDy=$rawDispDy")
+            // }
         }
 
         when (direction) {
@@ -83,6 +89,7 @@ class NavigationBarThreeFingerAdapter(
             val pts = intArrayOf(0, navUiX, navUiY, trackingBase)
             NativeBridge.injectTouch(touchFd, pts, 1)
             navInjected = true
+            consumed = true
         }
 
         var dispDx = (rawDispDx * settings.touchInjectSpeed).toInt()
@@ -128,6 +135,7 @@ class NavigationBarThreeFingerAdapter(
             }
             NativeBridge.injectTouch(touchFd, pts, 3)
             downModeInjected = true
+            consumed = true
         }
 
         var dispDx = (rawDispDx * settings.touchInjectSpeed).toInt()
