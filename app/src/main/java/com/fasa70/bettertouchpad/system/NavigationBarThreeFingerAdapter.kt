@@ -76,7 +76,7 @@ class NavigationBarThreeFingerAdapter(
     private fun updateNavBarGesture(settings: TouchpadSettings, rawDispDx: Int, rawDispDy: Int) {
         if (!navInjected) {
             navStartDispX = screenWidth / 2
-            navStartDispY = (screenHeight - 12).coerceAtLeast(0)
+            navStartDispY = 12 // (screenHeight - 12).coerceAtLeast(0)
             val start = toUinput(settings, navStartDispX, navStartDispY)
             navUiX = start.first
             navUiY = start.second
@@ -95,10 +95,12 @@ class NavigationBarThreeFingerAdapter(
         when (direction) {
             ThreeDir.UP -> {
                 targetDispX = navStartDispX
-                targetDispY = (navStartDispY + dispDy).coerceIn(0, navStartDispY)
+                targetDispY = (navStartDispY + dispDy).coerceIn(0, screenHeight - 1)
             }
             ThreeDir.LEFT, ThreeDir.RIGHT -> {
-                targetDispX = (navStartDispX + dispDx).coerceIn(0, screenWidth - 1)
+                val maxHorizontalStep = (screenWidth / 3).coerceAtLeast(1)
+                val clampedDispDx = dispDx.coerceIn(-maxHorizontalStep, maxHorizontalStep)
+                targetDispX = (navStartDispX + clampedDispDx).coerceIn(0, screenWidth - 1)
                 targetDispY = navStartDispY
             }
             else -> return
