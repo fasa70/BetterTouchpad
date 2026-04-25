@@ -106,7 +106,7 @@ class NavigationBarThreeFingerAdapter(
         val targetDispY: Int
         when (direction) {
             ThreeDir.UP -> {
-                targetDispX = navStartDispX
+                targetDispX = (navStartDispX + dispDx).coerceIn(0, screenWidth - 1)
                 targetDispY = (navStartDispY + dispDy).coerceIn(0, screenHeight - 1)
             }
             ThreeDir.LEFT, ThreeDir.RIGHT -> {
