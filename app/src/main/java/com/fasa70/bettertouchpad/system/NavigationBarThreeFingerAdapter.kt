@@ -10,6 +10,9 @@ private enum class ThreeDir {
 }
 
 private const val TAG = "ThreeFingerNavAdapter"
+private const val DIRECTION_LOCK_THRESHOLD_PX = 90
+private const val NAV_START_Y_PX = 12
+private const val HORIZONTAL_STEP_DIVISOR = 3
 
 class NavigationBarThreeFingerAdapter(
     private val touchFd: Int,
@@ -41,12 +44,7 @@ class NavigationBarThreeFingerAdapter(
     override fun onGestureMove(settings: TouchpadSettings, nowMs: Long, rawDispDx: Int, rawDispDy: Int) {
         if (!settings.threeFingerMove) return
 
-        if (direction == null) {
-            direction = detectDirection(rawDispDx, rawDispDy)
-            // if (direction != null) {
-            //     Log.d(TAG, "direction locked: dir=$direction rawDx=$rawDispDx rawDy=$rawDispDy")
-            // }
-        }
+        maybeLockDirection(rawDispDx, rawDispDy)
 
         when (direction) {
             ThreeDir.UP, ThreeDir.LEFT, ThreeDir.RIGHT -> updateNavBarGesture(settings, rawDispDx, rawDispDy)
@@ -62,15 +60,15 @@ class NavigationBarThreeFingerAdapter(
         if (downModeInjected) {
             NativeBridge.releaseAllTouches(touchFd, 3)
         }
+        Log.d(TAG, "three-finger end: consumed=$consumed navInjected=$navInjected downModeInjected=$downModeInjected")
     }
 
     override fun consumedAsDirectionalAction(): Boolean = consumed
 
     private fun detectDirection(rawDispDx: Int, rawDispDy: Int): ThreeDir? {
-        val thresholdPx = 90
         val adx = abs(rawDispDx)
         val ady = abs(rawDispDy)
-        if (adx < thresholdPx && ady < thresholdPx) return null
+        if (adx < DIRECTION_LOCK_THRESHOLD_PX && ady < DIRECTION_LOCK_THRESHOLD_PX) return null
 
         return if (ady >= adx) {
             if (rawDispDy < 0) ThreeDir.UP else ThreeDir.DOWN
@@ -79,23 +77,30 @@ class NavigationBarThreeFingerAdapter(
         }
     }
 
+    private fun maybeLockDirection(rawDispDx: Int, rawDispDy: Int) {
+        if (direction != null) return
+        direction = detectDirection(rawDispDx, rawDispDy)
+        if (direction != null) {
+            Log.d(TAG, "direction locked: direction=$direction rawDispDx=$rawDispDx rawDispDy=$rawDispDy")
+        }
+    }
+
     private fun updateNavBarGesture(settings: TouchpadSettings, rawDispDx: Int, rawDispDy: Int) {
         if (!navInjected) {
             navStartDispX = screenWidth / 2
-            navStartDispY = 12 // (screenHeight - 12).coerceAtLeast(0)
+            navStartDispY = NAV_START_Y_PX
             val start = toUinput(settings, navStartDispX, navStartDispY)
             navUiX = start.first
             navUiY = start.second
-            val pts = intArrayOf(0, navUiX, navUiY, trackingBase)
-            NativeBridge.injectTouch(touchFd, pts, 1)
+            injectSingleTouch(navUiX, navUiY)
             navInjected = true
             consumed = true
+            Log.d(TAG, "nav mode injected: direction=$direction startX=$navUiX startY=$navUiY")
         }
 
-        var dispDx = (rawDispDx * settings.touchInjectSpeed).toInt()
-        var dispDy = (rawDispDy * settings.touchInjectSpeed).toInt()
-        if (settings.invertX) dispDx = -dispDx
-        if (settings.invertY) dispDy = -dispDy
+        val transformed = transformDisp(settings, rawDispDx, rawDispDy)
+        val dispDx = transformed.first
+        val dispDy = transformed.second
 
         val targetDispX: Int
         val targetDispY: Int
@@ -105,7 +110,7 @@ class NavigationBarThreeFingerAdapter(
                 targetDispY = (navStartDispY + dispDy).coerceIn(0, screenHeight - 1)
             }
             ThreeDir.LEFT, ThreeDir.RIGHT -> {
-                val maxHorizontalStep = (screenWidth / 3).coerceAtLeast(1)
+                val maxHorizontalStep = (screenWidth / HORIZONTAL_STEP_DIVISOR).coerceAtLeast(1)
                 val clampedDispDx = dispDx.coerceIn(-maxHorizontalStep, maxHorizontalStep)
                 targetDispX = (navStartDispX + clampedDispDx).coerceIn(0, screenWidth - 1)
                 targetDispY = navStartDispY
@@ -117,8 +122,7 @@ class NavigationBarThreeFingerAdapter(
         navUiX = target.first
         navUiY = target.second
 
-        val pts = intArrayOf(0, navUiX, navUiY, trackingBase)
-        NativeBridge.injectTouch(touchFd, pts, 1)
+        injectSingleTouch(navUiX, navUiY)
     }
 
     private fun updateDownSwipeLegacy(settings: TouchpadSettings, rawDispDx: Int, rawDispDy: Int) {
@@ -136,13 +140,12 @@ class NavigationBarThreeFingerAdapter(
             NativeBridge.injectTouch(touchFd, pts, 3)
             downModeInjected = true
             consumed = true
+            Log.d(TAG, "down mode injected")
         }
 
-        var dispDx = (rawDispDx * settings.touchInjectSpeed).toInt()
-        var dispDy = (rawDispDy * settings.touchInjectSpeed).toInt()
-
-        if (settings.invertX) dispDx = -dispDx
-        if (settings.invertY) dispDy = -dispDy
+        val transformed = transformDisp(settings, rawDispDx, rawDispDy)
+        val dispDx = transformed.first
+        val dispDy = transformed.second
 
         val uiDx = if (!settings.swapAxes) dispDx else dispDy
         val uiDy = if (!settings.swapAxes) dispDy else dispDx
@@ -157,6 +160,19 @@ class NavigationBarThreeFingerAdapter(
             pts[i * 4 + 3] = trackingBase + i
         }
         NativeBridge.injectTouch(touchFd, pts, 3)
+    }
+
+    private fun transformDisp(settings: TouchpadSettings, rawDispDx: Int, rawDispDy: Int): Pair<Int, Int> {
+        var dispDx = (rawDispDx * settings.touchInjectSpeed).toInt()
+        var dispDy = (rawDispDy * settings.touchInjectSpeed).toInt()
+        if (settings.invertX) dispDx = -dispDx
+        if (settings.invertY) dispDy = -dispDy
+        return Pair(dispDx, dispDy)
+    }
+
+    private fun injectSingleTouch(uiX: Int, uiY: Int) {
+        val pts = intArrayOf(0, uiX, uiY, trackingBase)
+        NativeBridge.injectTouch(touchFd, pts, 1)
     }
 
     private fun toUinput(settings: TouchpadSettings, dispX: Int, dispY: Int): Pair<Int, Int> {
