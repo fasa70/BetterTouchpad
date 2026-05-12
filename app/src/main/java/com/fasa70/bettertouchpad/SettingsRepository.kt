@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class TouchpadSettings(
+    // Onboarding
+    val hasSeenOnboarding: Boolean = false,
+
     // Auto-detect touchpad device path and coordinate range
     val autoDetectDevice: Boolean = true,
     val devicePath: String = "/dev/input/event5",
@@ -74,6 +77,7 @@ class SettingsRepository(context: Context) {
     }
 
     private fun load() = TouchpadSettings(
+        hasSeenOnboarding   = prefs.getBoolean("hasSeenOnboarding", false),
         autoDetectDevice    = prefs.getBoolean("autoDetectDevice", true),
         devicePath          = prefs.getString("devicePath", "/dev/input/event5") ?: "/dev/input/event5",
         singleFingerMove    = prefs.getBoolean("singleFingerMove", true),
@@ -110,6 +114,7 @@ class SettingsRepository(context: Context) {
 
     private fun save(s: TouchpadSettings) {
         prefs.edit().apply {
+            putBoolean("hasSeenOnboarding", s.hasSeenOnboarding)
             putBoolean("autoDetectDevice", s.autoDetectDevice)
             putString("devicePath", s.devicePath)
             putBoolean("singleFingerMove", s.singleFingerMove)

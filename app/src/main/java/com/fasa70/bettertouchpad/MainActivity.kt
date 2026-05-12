@@ -9,8 +9,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.fasa70.bettertouchpad.ui.SettingsScreen
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import com.fasa70.bettertouchpad.ui.*
 import com.fasa70.bettertouchpad.ui.theme.BetterTouchpadTheme
 
 class MainActivity : ComponentActivity() {
@@ -22,67 +23,48 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             BetterTouchpadTheme {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    topBar = {
-                        @OptIn(ExperimentalMaterial3Api::class)
-                        TopAppBar(title = { Text("BetterTouchpad") })
-                    }
-                ) { innerPadding ->
-                    Column(modifier = Modifier.padding(innerPadding)) {
-                        ServiceControlCard()
-                        SettingsScreen(settingsRepo)
-                    }
-                }
-            }
-        }
-    }
-
-    @Composable
-    private fun ServiceControlCard() {
-        var running by remember { mutableStateOf(TouchpadService.isRunning) }
-
-        // Refresh every second
-        LaunchedEffect(Unit) {
-            while (true) {
-                running = TouchpadService.isRunning
-                kotlinx.coroutines.delay(1000)
-            }
-        }
-
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text("触控板状态", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        if (running) "运行中" else "已停止",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (running) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.error
-                    )
-                }
-                Button(onClick = {
-                    if (running) {
-                        stopService(Intent(this@MainActivity, TouchpadService::class.java))
-                    } else {
-                        startForegroundService(
-                            Intent(this@MainActivity, TouchpadService::class.java)
-                        )
-                    }
-                    running = !running
-                }) {
-                    Text(if (running) "停止" else "启动")
-                }
+                MainScreen(settingsRepo)
             }
         }
     }
 }
+
+@Composable
+private fun MainScreen(repo: SettingsRepository) {
+    var selectedTab by remember { mutableStateOf(0) }
+    val tabs = listOf(
+        TabInfo("手势", Icons.Default.Star),
+        TabInfo("触控", Icons.Default.Refresh),
+        TabInfo("兼容", Icons.Default.Settings),
+        TabInfo("关于", Icons.Default.Info)
+    )
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            NavigationBar {
+                tabs.forEachIndexed { index, tab ->
+                    NavigationBarItem(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        icon = { Icon(tab.icon, contentDescription = tab.label) },
+                        label = { Text(tab.label) }
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
+        Column(modifier = Modifier.padding(innerPadding)) {
+            ServiceControlCard()
+
+            when (selectedTab) {
+                0 -> GestureSettingsTab(repo)
+                1 -> TouchSettingsTab(repo)
+                2 -> CompatibilitySettingsTab(repo)
+                3 -> AboutTab()
+            }
+        }
+    }
+}
+
+private data class TabInfo(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)

@@ -6,6 +6,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,10 +22,13 @@ import androidx.compose.ui.unit.sp
 import com.fasa70.bettertouchpad.SettingsRepository
 import com.fasa70.bettertouchpad.system.ThreeFingerMode
 
+// ─── Tab 1: Gesture Settings ─────────────────────────────────────────────
+
+private var showThreeFingerHelpDialog by mutableStateOf(false)
+
 @Composable
-fun SettingsScreen(repo: SettingsRepository) {
+fun GestureSettingsTab(repo: SettingsRepository) {
     val settings by repo.settings.collectAsState()
-    val focusManager = LocalFocusManager.current
 
     Column(
         modifier = Modifier
@@ -32,33 +37,29 @@ fun SettingsScreen(repo: SettingsRepository) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // ── Feature toggles ───────────────────────────────────────────────
-        Text("功能开关", fontSize = 18.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(vertical = 8.dp))
-
+        SectionTitle("单指手势")
         FeatureSwitch("单指划动 (移动光标)", settings.singleFingerMove) {
             repo.update { copy(singleFingerMove = it) }
         }
         FeatureSwitch("单指单击 (鼠标左键)", settings.singleFingerTap) {
             repo.update { copy(singleFingerTap = it) }
         }
-        FeatureSwitch("按下触控板 (鼠标左键)", settings.physicalClick) {
-            repo.update { copy(physicalClick = it) }
-        }
         FeatureSwitch("轻触两下以拖移", settings.doubleTapDrag) {
             repo.update { copy(doubleTapDrag = it) }
         }
+
+        SectionTitle("双指手势")
         FeatureSwitch("双指单击 (鼠标右键)", settings.twoFingerTap) {
             repo.update { copy(twoFingerTap = it) }
-        }
-        FeatureSwitch("双指捏合缩放", settings.twoFingerZoom) {
-            repo.update { copy(twoFingerZoom = it) }
         }
         FeatureSwitch("双指划动 (鼠标滚轮)", settings.twoFingerScroll) {
             repo.update { copy(twoFingerScroll = it) }
         }
-        FeatureSwitch("自然滚动 (内容滚动方向与手指方向一致)", settings.naturalScroll) {
+        FeatureSwitch("自然滚动", settings.naturalScroll) {
             repo.update { copy(naturalScroll = it) }
+        }
+        FeatureSwitch("双指捏合缩放（注入触摸）", settings.twoFingerZoom) {
+            repo.update { copy(twoFingerZoom = it) }
         }
         FeatureSwitch("双指边缘内划 (返回上一级)", settings.edgeSwipe) {
             repo.update { copy(edgeSwipe = it) }
@@ -66,19 +67,31 @@ fun SettingsScreen(repo: SettingsRepository) {
         FeatureSwitch("双指顶部下滑（通知中心/控制中心）", settings.twoFingerTopSwipe) {
             repo.update { copy(twoFingerTopSwipe = it) }
         }
-        FeatureSwitch("三指手势 (返回桌面/截图/分屏)", settings.threeFingerMove) {
-            repo.update { copy(threeFingerMove = it) }
-        }
+
+        SectionTitle("三指手势")
         FeatureSwitch("三指单击 (鼠标中键)", settings.threeFingerMiddleClick) {
             repo.update { copy(threeFingerMiddleClick = it) }
         }
+        FeatureSwitch("三指系统级手势", settings.threeFingerMove) {
+            repo.update { copy(threeFingerMove = it) }
+        }
         if (settings.threeFingerMove) {
-            Text(
-                "三指手势模式（切换后需重启服务生效）",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "实现方案",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                TextButton(onClick = { showThreeFingerHelpDialog = true }) {
+                    Text("说明", fontSize = 12.sp)
+                }
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -90,7 +103,7 @@ fun SettingsScreen(repo: SettingsRepository) {
                     selected = settings.threeFingerMode == ThreeFingerMode.LEGACY,
                     onClick = { repo.update { copy(threeFingerMode = ThreeFingerMode.LEGACY) } }
                 )
-                Text("屏幕中央三点触摸 (HyperOS 推荐)", modifier = Modifier.padding(start = 8.dp))
+                Text("澎湃OS专用方案 (向屏幕中央注入三点触摸)", modifier = Modifier.padding(start = 8.dp))
             }
             Row(
                 modifier = Modifier
@@ -103,22 +116,50 @@ fun SettingsScreen(repo: SettingsRepository) {
                     selected = settings.threeFingerMode == ThreeFingerMode.NAVBAR,
                     onClick = { repo.update { copy(threeFingerMode = ThreeFingerMode.NAVBAR) } }
                 )
-                Text("底部手势条 (通用模式)", modifier = Modifier.padding(start = 8.dp))
+                Text("通用方案 (向系统底部导航条注入触摸)", modifier = Modifier.padding(start = 8.dp))
             }
         }
-        Text(
-            "屏幕中央三点触摸：三指在屏幕中央注入三指触控，适合澎湃系统。\n" +
-                "底部手势条：三指映射到底部导航栏手势条，适合非澎湃系统。",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 4.dp)
+
+        SectionTitle("其他")
+        FeatureSwitch("按下触控板 (鼠标左键)", settings.physicalClick) {
+            repo.update { copy(physicalClick = it) }
+        }
+    }
+
+    if (showThreeFingerHelpDialog) {
+        AlertDialog(
+            onDismissRequest = { showThreeFingerHelpDialog = false },
+            title = { Text("三指手势方案差异") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("澎湃OS专用方案：向屏幕中央注入三点触摸\n三指上划-最近任务/返回桌面\n三指上划并横向划动-快切应用\n三指横划-快捷分屏\n三指长按不动-区域截屏\n三指下划-快捷截屏", fontSize = 14.sp)
+                    Text("通用方案：\n三指上划-最近任务/返回桌面\n三指横划-快切应用\n三指下滑-快捷截屏", fontSize = 14.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showThreeFingerHelpDialog = false }) {
+                    Text("知道了")
+                }
+            }
         )
+    }
+}
 
-        // ── Sensitivity ───────────────────────────────────────────────────
-        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-        Text("灵敏度设置", fontSize = 18.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp))
+// ─── Tab 2: Touch Settings ───────────────────────────────────────────────
 
+@Composable
+fun TouchSettingsTab(repo: SettingsRepository) {
+    val settings by repo.settings.collectAsState()
+    val focusManager = LocalFocusManager.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        SectionTitle("灵敏度")
         SensitivityRow(
             label = "光标灵敏度",
             value = settings.cursorSensitivity,
@@ -134,34 +175,30 @@ fun SettingsScreen(repo: SettingsRepository) {
             onDone = { focusManager.clearFocus() }
         )
         SensitivityRow(
-            label = "捏合缩放灵敏度",
+            label = "双指捏合手势缩放灵敏度",
             value = settings.zoomSensitivity,
             range = 0.5f..5.0f,
             onValueChange = { repo.update { copy(zoomSensitivity = it) } },
             onDone = { focusManager.clearFocus() }
         )
         SensitivityRow(
-            label = "捏合距离变化阈值 (px)",
+            label = "双指捏合手势判定阈值 (px)",
             value = settings.minPinchDistance,
             range = 10f..300f,
             onValueChange = { repo.update { copy(minPinchDistance = it) } },
             onDone = { focusManager.clearFocus() }
         )
         SensitivityRow(
-            label = "触摸注入灵敏度（影响双指边缘內划和三指手势）",
+            label = "三指手势触摸注入灵敏度",
             value = settings.touchInjectSpeed,
             range = 0.01f..3.0f,
             onValueChange = { repo.update { copy(touchInjectSpeed = it) } },
             onDone = { focusManager.clearFocus() }
         )
 
-        // ── Edge threshold ────────────────────────────────────────────────
-        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-        Text("其他设置", fontSize = 18.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 4.dp))
-
+        SectionTitle("双指手势触发区域")
         SensitivityRow(
-            label = "边缘触发区域宽度 (占X轴比例)",
+            label = "边缘手势触发区域宽度 (占X轴比例)",
             value = settings.edgeThreshold,
             range = 0.01f..0.30f,
             onValueChange = { repo.update { copy(edgeThreshold = it) } },
@@ -188,60 +225,32 @@ fun SettingsScreen(repo: SettingsRepository) {
             modifier = Modifier.padding(bottom = 4.dp)
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        SectionTitle("双击拖移")
+        DoubleTapDragIntervalSetting(repo, focusManager)
+    }
+}
 
-        // Double-tap drag interval
-        Text("双击拖移间隔时间 (ms)", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Slider(
-                value = settings.doubleTapIntervalMs.toFloat(),
-                onValueChange = { repo.update { copy(doubleTapIntervalMs = it.toInt()) } },
-                valueRange = 10f..500f,
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            var dtText by remember(settings.doubleTapIntervalMs) { mutableStateOf(settings.doubleTapIntervalMs.toString()) }
-            OutlinedTextField(
-                value = dtText,
-                onValueChange = { dtText = it },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(onDone = {
-                    dtText.toIntOrNull()?.takeIf { it in 50..500 }?.let {
-                        repo.update { copy(doubleTapIntervalMs = it) }
-                    }
-                    focusManager.clearFocus()
-                }),
-                singleLine = true,
-                modifier = Modifier.width(88.dp),
-                textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
-            )
-        }
+// ─── Tab 3: Compatibility Settings ───────────────────────────────────────
+
+@Composable
+fun CompatibilitySettingsTab(repo: SettingsRepository) {
+    val settings by repo.settings.collectAsState()
+    val focusManager = LocalFocusManager.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        SectionTitle("触摸注入方向校正")
         Text(
-            "两次点击间隔不超过此时间时，触发双击拖移",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // ── Axis correction ───────────────────────────────────────────────
-        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-        Text("触摸注入方向校正", fontSize = 18.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 4.dp))
-        Text(
-            "当双指/三指手势注入的触摸方向不正确时，使用以下选项进行修正。\n默认开启xy轴对调和反转y轴",
+            "当双指/三指手势注入的触摸方向不正确时，使用以下选项进行修正。\n默认开启 XY 轴对调和反转 Y 轴。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-
         FeatureSwitch("XY 轴对调 (交换横纵方向)", settings.swapAxes) {
             repo.update { copy(swapAxes = it) }
         }
@@ -252,11 +261,7 @@ fun SettingsScreen(repo: SettingsRepository) {
             repo.update { copy(invertY = it) }
         }
 
-        // ── Auto-detect device ────────────────────────────────────────────
-        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-        Text("兼容性设置", fontSize = 18.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 4.dp))
-
+        SectionTitle("兼容性设置")
         FeatureSwitch("独占设备 (EVIOCGRAB)", settings.exclusiveGrab) {
             repo.update { copy(exclusiveGrab = it) }
         }
@@ -266,8 +271,6 @@ fun SettingsScreen(repo: SettingsRepository) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp)
         )
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         FeatureSwitch("自动匹配触控板设备路径和坐标值范围", settings.autoDetectDevice) {
             repo.update { copy(autoDetectDevice = it) }
@@ -280,8 +283,6 @@ fun SettingsScreen(repo: SettingsRepository) {
         )
 
         if (!settings.autoDetectDevice) {
-            Spacer(modifier = Modifier.height(4.dp))
-            // Device path input
             var devicePathText by remember(settings.devicePath) { mutableStateOf(settings.devicePath) }
             OutlinedTextField(
                 value = devicePathText,
@@ -298,7 +299,6 @@ fun SettingsScreen(repo: SettingsRepository) {
                     .padding(vertical = 4.dp)
             )
 
-            // Coordinate range inputs
             Text(
                 "触控板坐标最大值",
                 fontSize = 14.sp,
@@ -311,7 +311,6 @@ fun SettingsScreen(repo: SettingsRepository) {
                 v.toIntOrNull()?.takeIf { it > 0 }?.let { repo.update { copy(padMaxY = it) } }
             }
         } else {
-            // Show detected values as read-only info when auto-detect is on
             Text(
                 "当前设备路径：${settings.devicePath}\n坐标最大值：X=${settings.padMaxX}  Y=${settings.padMaxY}\n（启动服务后自动更新）",
                 fontSize = 12.sp,
@@ -319,31 +318,69 @@ fun SettingsScreen(repo: SettingsRepository) {
                 modifier = Modifier.padding(vertical = 4.dp)
             )
         }
-
-        // Footer: centered small attribution + GitHub link
-        val uriHandler = LocalUriHandler.current
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "by 风洒青泥",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "觉得好用的话别忘了在github上给我点个star⭐~",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable {
-                    uriHandler.openUri("https://github.com/fasa70/BetterTouchpad")
-                }
-            )
-        }
     }
+}
+
+// ─── Tab 4: About ────────────────────────────────────────────────────────
+
+@Composable
+fun AboutTab() {
+    val uriHandler = LocalUriHandler.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "BetterTouchpad",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            "让 Android 触控板行为更接近真实鼠标",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            "by 风洒青泥",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            "觉得好用的话别忘了在 GitHub 上给我点个 ⭐~",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.clickable {
+                uriHandler.openUri("https://github.com/fasa70/BetterTouchpad")
+            }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            "https://github.com/fasa70/BetterTouchpad",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+// ─── Shared Helpers ──────────────────────────────────────────────────────
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(vertical = 8.dp)
+    )
+    HorizontalDivider(modifier = Modifier.padding(bottom = 4.dp))
 }
 
 @Composable
@@ -360,11 +397,6 @@ private fun FeatureSwitch(label: String, checked: Boolean, onCheckedChange: (Boo
     }
 }
 
-/**
- * A row with a slider + a small text field that both control the same Float value.
- * The slider covers [range] continuously (no fixed steps → smooth).
- * The text field lets the user type an exact value and confirms on Done / focus-loss.
- */
 @Composable
 private fun SensitivityRow(
     label: String,
@@ -373,18 +405,8 @@ private fun SensitivityRow(
     onValueChange: (Float) -> Unit,
     onDone: () -> Unit = {}
 ) {
-    // Local text state — only committed to the repo when valid
     var textValue by remember(value) { mutableStateOf("%.3f".format(value)) }
-    // Track whether the text field is being edited so we don't fight the slider
     var isEditing by remember { mutableStateOf(false) }
-
-    fun commitText(raw: String) {
-        val f = raw.toFloatOrNull() ?: return
-        val clamped = f.coerceIn(range.start, range.endInclusive)
-        onValueChange(clamped)
-        textValue = "%.3f".format(clamped)
-        isEditing = false
-    }
 
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Text(label, fontSize = 14.sp, modifier = Modifier.padding(bottom = 2.dp))
@@ -408,6 +430,11 @@ private fun SensitivityRow(
                 value = textValue,
                 onValueChange = {
                     textValue = it
+                    val f = it.toFloatOrNull()
+                    if (f != null) {
+                        val clamped = f.coerceIn(range.start, range.endInclusive)
+                        onValueChange(clamped)
+                    }
                     isEditing = true
                 },
                 keyboardOptions = KeyboardOptions(
@@ -415,7 +442,7 @@ private fun SensitivityRow(
                     imeAction    = ImeAction.Done
                 ),
                 keyboardActions = KeyboardActions(
-                    onDone = { commitText(textValue); onDone() }
+                    onDone = { onDone() }
                 ),
                 singleLine = true,
                 modifier = Modifier.width(88.dp),
@@ -440,5 +467,49 @@ private fun CoordInput(label: String, value: String, onValueChange: (String) -> 
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
+    )
+}
+
+@Composable
+private fun DoubleTapDragIntervalSetting(repo: SettingsRepository, focusManager: androidx.compose.ui.focus.FocusManager) {
+    val settings by repo.settings.collectAsState()
+
+    Text("双击拖移间隔时间 (ms)", fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Slider(
+            value = settings.doubleTapIntervalMs.toFloat(),
+            onValueChange = { repo.update { copy(doubleTapIntervalMs = it.toInt()) } },
+            valueRange = 10f..500f,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        var dtText by remember(settings.doubleTapIntervalMs) { mutableStateOf(settings.doubleTapIntervalMs.toString()) }
+        OutlinedTextField(
+            value = dtText,
+            onValueChange = { dtText = it
+                dtText.toIntOrNull()?.takeIf { v -> v in 50..500 }?.let { v ->
+                    repo.update { copy(doubleTapIntervalMs = v) }
+                }
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = {
+                focusManager.clearFocus()
+            }),
+            singleLine = true,
+            modifier = Modifier.width(88.dp),
+            textStyle = LocalTextStyle.current.copy(fontSize = 13.sp)
+        )
+    }
+    Text(
+        "两次点击间隔不超过此时间时，触发双击拖移",
+        fontSize = 12.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 4.dp)
     )
 }
