@@ -2,6 +2,8 @@ package com.fasa70.bettertouchpad
 
 import android.util.Log
 import com.fasa70.bettertouchpad.system.ThreeFingerActionAdapter
+import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.sqrt
 
 // Linux input key codes
@@ -14,7 +16,7 @@ private const val TAP_MAX_MS         = 280L
 private const val TAP_MAX_MOVE_PX    = 180
 
 private enum class GestureState {
-    IDLE, SINGLE_MOVING, DRAG, SCROLL, EDGE_SWIPE, THREE_FINGER
+    IDLE, SINGLE_MOVING, DRAG, SCROLL, EDGE_SWIPE, THREE_FINGER, PINCH_ZOOM
 }
 
 class GestureRecognizer(
@@ -63,6 +65,12 @@ class GestureRecognizer(
     // Fixed edge-swipe injection point in uinput coordinates (set when gesture starts)
     private var edgeFixedUiX = 0
     private var edgeFixedUiY = 0
+
+    // Pinch/zoom state tracking
+    private var pinchInitialDistance = 0f
+    private var pinchCurrentPadX0 = 0; private var pinchCurrentPadY0 = 0
+    private var pinchCurrentPadX1 = 0; private var pinchCurrentPadY1 = 0
+    private var pinchTrackingId0 = 0; private var pinchTrackingId1 = 0
 
     private enum class ThreeFingerFinalizeReason {
         FINGER_DROP,
@@ -152,6 +160,12 @@ class GestureRecognizer(
                         state = GestureState.SINGLE_MOVING
                     }
 
+                    GestureState.PINCH_ZOOM -> {
+                        releasePinchTouches()
+                        trailingAfterScroll = true
+                        state = GestureState.SINGLE_MOVING
+                    }
+
                     GestureState.SINGLE_MOVING, GestureState.DRAG -> {
                         val p = prevSlots[si]
                         // Only move cursor if the slot was active last frame, feature is enabled,
@@ -234,18 +248,62 @@ class GestureRecognizer(
                     }
 
                     GestureState.SCROLL -> {
-                        if (p0.active && p1.active && s.twoFingerScroll) {
-                            val avgDy = ((c0.y - p0.y) + (c1.y - p1.y)) / 2f
-                            val avgDx = ((c0.x - p0.x) + (c1.x - p1.x)) / 2f
-                            val hiResScale = s.scrollSensitivity * 3f
-                            val sign = if (s.naturalScroll) 1f else -1f
-                            scrollAccV += avgDy * hiResScale * sign
-                            scrollAccH += avgDx * hiResScale * sign
+                        if (p0.active && p1.active) {
+                            // Check for pinch-to-zoom
+                            if (s.twoFingerZoom) {
+                                val currentDist = sqrt(
+                                    (c0.x - c1.x).toDouble().let { it * it } +
+                                        (c0.y - c1.y).toDouble().let { it * it }
+                                ).toFloat()
+                                val initialDist = sqrt(
+                                    (startSlots[ai[0]].x - startSlots[ai[1]].x).toDouble()
+                                        .let { it * it } +
+                                        (startSlots[ai[0]].y - startSlots[ai[1]].y).toDouble()
+                                            .let { it * it }
+                                ).toFloat()
 
-                            val hiV = scrollAccV.toInt(); scrollAccV -= hiV
-                            val hiH = scrollAccH.toInt(); scrollAccH -= hiH
-                            if (hiV != 0 || hiH != 0) {
-                                NativeBridge.sendWheelHiRes(mouseFd, hiV, hiH)
+                                val dx0 = c0.x - startSlots[ai[0]].x
+                                val dy0 = c0.y - startSlots[ai[0]].y
+                                val dx1 = c1.x - startSlots[ai[1]].x
+                                val dy1 = c1.y - startSlots[ai[1]].y
+                                val avgDx = (dx0 + dx1) / 2f
+                                val avgDy = (dy0 + dy1) / 2f
+                                val moveDelta = sqrt(avgDx * avgDx + avgDy * avgDy)
+                                val distanceDelta = abs(currentDist - initialDist)
+
+                                // Finger movement direction: dot product of per-frame displacements
+                                val fdx0 = c0.x - p0.x
+                                val fdy0 = c0.y - p0.y
+                                val fdx1 = c1.x - p1.x
+                                val fdy1 = c1.y - p1.y
+                                val dotProduct = fdx0 * fdx1 + fdy0 * fdy1
+                                val isOpposing = dotProduct < 0
+
+                                if (isOpposing && distanceDelta > s.minPinchDistance && distanceDelta / max(moveDelta, 1.0f) > s.zoomSensitivity) {
+                                    enterPinchZoom(c0, c1, initialDist, s)
+                                    pinchCurrentPadX0 = c0.x; pinchCurrentPadY0 = c0.y
+                                    pinchCurrentPadX1 = c1.x; pinchCurrentPadY1 = c1.y
+                                    injectPinchTouch(s)
+                                    // Skip scroll for this frame
+                                    for (i in cur.indices) prevSlots[i] = cur[i]
+                                    return@onFrame
+                                }
+                            }
+
+                            // Normal scroll handling
+                            if (s.twoFingerScroll) {
+                                val avgDy = ((c0.y - p0.y) + (c1.y - p1.y)) / 2f
+                                val avgDx = ((c0.x - p0.x) + (c1.x - p1.x)) / 2f
+                                val hiResScale = s.scrollSensitivity * 3f
+                                val sign = if (s.naturalScroll) 1f else -1f
+                                scrollAccV += avgDy * hiResScale * sign
+                                scrollAccH += avgDx * hiResScale * sign
+
+                                val hiV = scrollAccV.toInt(); scrollAccV -= hiV
+                                val hiH = scrollAccH.toInt(); scrollAccH -= hiH
+                                if (hiV != 0 || hiH != 0) {
+                                    NativeBridge.sendWheelHiRes(mouseFd, hiV, hiH)
+                                }
                             }
                         }
                     }
@@ -281,6 +339,14 @@ class GestureRecognizer(
                         }
                     }
 
+                    GestureState.PINCH_ZOOM -> {
+                        if (p0.active && p1.active && s.twoFingerZoom) {
+                            pinchCurrentPadX0 = c0.x; pinchCurrentPadY0 = c0.y
+                            pinchCurrentPadX1 = c1.x; pinchCurrentPadY1 = c1.y
+                            injectPinchTouch(s)
+                        }
+                    }
+
                     else -> {}
                 }
             }
@@ -294,7 +360,8 @@ class GestureRecognizer(
                     GestureState.SINGLE_MOVING,
                     GestureState.DRAG,
                     GestureState.SCROLL,
-                    GestureState.EDGE_SWIPE -> {
+                    GestureState.EDGE_SWIPE,
+                    GestureState.PINCH_ZOOM -> {
                         enterThreeFingerGesture(cur, ai, now, s)
                     }
 
@@ -386,6 +453,10 @@ class GestureRecognizer(
                 NativeBridge.releaseAllTouches(touchFd, 1)
             }
 
+            GestureState.PINCH_ZOOM -> {
+                releasePinchTouches()
+            }
+
             GestureState.THREE_FINGER -> {
                 threeFingerAdapter.onGestureEnd(s)
                 maybeFireThreeFingerMiddleClick(s, prevActiveCount, duration, ThreeFingerFinalizeReason.ALL_FINGERS_UP)
@@ -423,6 +494,9 @@ class GestureRecognizer(
         }
         if (state == GestureState.EDGE_SWIPE) {
             NativeBridge.releaseAllTouches(touchFd, 1)
+        }
+        if (state == GestureState.PINCH_ZOOM) {
+            releasePinchTouches()
         }
 
         pendingFirstTap = false
@@ -483,6 +557,51 @@ class GestureRecognizer(
         NativeBridge.sendMouseButton(mouseFd, BTN_MIDDLE, true)
         Thread.sleep(16)
         NativeBridge.sendMouseButton(mouseFd, BTN_MIDDLE, false)
+    }
+
+    private fun padToTouchX(padX: Int, s: TouchpadSettings): Int {
+        val uinputW = if (s.swapAxes) screenHeight else screenWidth
+        var tx = (padX.toFloat() / s.padMaxX * uinputW).toInt()
+        if (s.invertX) tx = uinputW - 1 - tx
+        return tx.coerceIn(0, uinputW - 1)
+    }
+
+    private fun padToTouchY(padY: Int, s: TouchpadSettings): Int {
+        val uinputH = if (s.swapAxes) screenWidth else screenHeight
+        var ty = (padY.toFloat() / s.padMaxY * uinputH).toInt()
+        if (s.invertY) ty = uinputH - 1 - ty
+        return ty.coerceIn(0, uinputH - 1)
+    }
+
+    private fun injectPinchTouch(s: TouchpadSettings) {
+        val tx0 = padToTouchX(pinchCurrentPadX0, s)
+        val ty0 = padToTouchY(pinchCurrentPadY0, s)
+        val tx1 = padToTouchX(pinchCurrentPadX1, s)
+        val ty1 = padToTouchY(pinchCurrentPadY1, s)
+        val pts = intArrayOf(
+            0, tx0, ty0, pinchTrackingId0,
+            1, tx1, ty1, pinchTrackingId1
+        )
+        NativeBridge.injectTouch(touchFd, pts, 2)
+    }
+
+    private fun releasePinchTouches() {
+        NativeBridge.releaseAllTouches(touchFd, 2)
+    }
+
+    private fun enterPinchZoom(
+        c0: SlotSnapshot, c1: SlotSnapshot,
+        initialDist: Float, s: TouchpadSettings
+    ) {
+        nextTid++
+        pinchTrackingId0 = nextTid
+        nextTid++
+        pinchTrackingId1 = nextTid
+        pinchInitialDistance = initialDist
+        pinchCurrentPadX0 = c0.x; pinchCurrentPadY0 = c0.y
+        pinchCurrentPadX1 = c1.x; pinchCurrentPadY1 = c1.y
+        state = GestureState.PINCH_ZOOM
+        injectPinchTouch(s)
     }
 
     /** Called from JNI when a EV_KEY event arrives. */

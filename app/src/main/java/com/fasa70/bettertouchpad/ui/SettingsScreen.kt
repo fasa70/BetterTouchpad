@@ -51,6 +51,9 @@ fun SettingsScreen(repo: SettingsRepository) {
         FeatureSwitch("双指单击 (鼠标右键)", settings.twoFingerTap) {
             repo.update { copy(twoFingerTap = it) }
         }
+        FeatureSwitch("双指捏合缩放", settings.twoFingerZoom) {
+            repo.update { copy(twoFingerZoom = it) }
+        }
         FeatureSwitch("双指划动 (鼠标滚轮)", settings.twoFingerScroll) {
             repo.update { copy(twoFingerScroll = it) }
         }
@@ -125,6 +128,20 @@ fun SettingsScreen(repo: SettingsRepository) {
             value = settings.scrollSensitivity,
             range = 0.01f..5.0f,
             onValueChange = { repo.update { copy(scrollSensitivity = it) } },
+            onDone = { focusManager.clearFocus() }
+        )
+        SensitivityRow(
+            label = "捏合缩放灵敏度",
+            value = settings.zoomSensitivity,
+            range = 0.5f..5.0f,
+            onValueChange = { repo.update { copy(zoomSensitivity = it) } },
+            onDone = { focusManager.clearFocus() }
+        )
+        SensitivityRow(
+            label = "捏合距离变化阈值 (px)",
+            value = settings.minPinchDistance,
+            range = 10f..300f,
+            onValueChange = { repo.update { copy(minPinchDistance = it) } },
             onDone = { focusManager.clearFocus() }
         )
         SensitivityRow(

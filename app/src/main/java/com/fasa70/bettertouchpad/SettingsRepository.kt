@@ -19,6 +19,9 @@ data class TouchpadSettings(
     val doubleTapDrag: Boolean = true,
     val twoFingerTap: Boolean = true,
     val twoFingerScroll: Boolean = true,
+    val twoFingerZoom: Boolean = true,
+    val zoomSensitivity: Float = 1.5f,
+    val minPinchDistance: Float = 50f,
     val edgeSwipe: Boolean = true,
     val threeFingerMove: Boolean = true,
     val threeFingerMode: ThreeFingerMode = ThreeFingerMode.LEGACY,
@@ -74,6 +77,9 @@ class SettingsRepository(context: Context) {
         doubleTapDrag       = prefs.getBoolean("doubleTapDrag", true),
         twoFingerTap        = prefs.getBoolean("twoFingerTap", true),
         twoFingerScroll     = prefs.getBoolean("twoFingerScroll", true),
+        twoFingerZoom       = prefs.getBoolean("twoFingerZoom", true),
+        zoomSensitivity     = prefs.getFloat("zoomSensitivity", 1.5f),
+        minPinchDistance    = prefs.getFloat("minPinchDistance", 50f),
         edgeSwipe           = prefs.getBoolean("edgeSwipe", true),
         threeFingerMove     = prefs.getBoolean("threeFingerMove", true),
         threeFingerMode     = prefs.getString("threeFingerMode", "LEGACY")
@@ -104,6 +110,9 @@ class SettingsRepository(context: Context) {
             putBoolean("doubleTapDrag", s.doubleTapDrag)
             putBoolean("twoFingerTap", s.twoFingerTap)
             putBoolean("twoFingerScroll", s.twoFingerScroll)
+            putBoolean("twoFingerZoom", s.twoFingerZoom)
+            putFloat("zoomSensitivity", s.zoomSensitivity)
+            putFloat("minPinchDistance", s.minPinchDistance)
             putBoolean("edgeSwipe", s.edgeSwipe)
             putBoolean("threeFingerMove", s.threeFingerMove)
             putString("threeFingerMode", s.threeFingerMode.name)
