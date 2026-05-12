@@ -63,6 +63,9 @@ fun SettingsScreen(repo: SettingsRepository) {
         FeatureSwitch("双指边缘内划 (返回上一级)", settings.edgeSwipe) {
             repo.update { copy(edgeSwipe = it) }
         }
+        FeatureSwitch("双指顶部下滑（通知中心/控制中心）", settings.twoFingerTopSwipe) {
+            repo.update { copy(twoFingerTopSwipe = it) }
+        }
         FeatureSwitch("三指手势 (返回桌面/截图/分屏)", settings.threeFingerMove) {
             repo.update { copy(threeFingerMove = it) }
         }
@@ -163,6 +166,26 @@ fun SettingsScreen(repo: SettingsRepository) {
             range = 0.01f..0.30f,
             onValueChange = { repo.update { copy(edgeThreshold = it) } },
             onDone = { focusManager.clearFocus() }
+        )
+        SensitivityRow(
+            label = "顶部手势触发区域宽度 (占X轴比例)",
+            value = settings.topEdgeZoneRatio,
+            range = 0.1f..0.50f,
+            onValueChange = { repo.update { copy(topEdgeZoneRatio = it) } },
+            onDone = { focusManager.clearFocus() }
+        )
+        SensitivityRow(
+            label = "顶部手势触发区域高度 (占Y轴比例)",
+            value = settings.topEdgeThreshold,
+            range = 0.01f..0.30f,
+            onValueChange = { repo.update { copy(topEdgeThreshold = it) } },
+            onDone = { focusManager.clearFocus() }
+        )
+        Text(
+            "双指从触控板顶部触发区下滑：左侧触发通知中心，右侧触发控制中心。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
         )
 
         Spacer(modifier = Modifier.height(4.dp))

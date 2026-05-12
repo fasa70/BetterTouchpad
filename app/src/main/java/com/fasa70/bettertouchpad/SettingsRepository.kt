@@ -49,7 +49,12 @@ data class TouchpadSettings(
     val doubleTapIntervalMs: Int = 100,
 
     // Exclusively grab the input device (EVIOCGRAB); disable on devices where it causes issues
-    val exclusiveGrab: Boolean = true
+    val exclusiveGrab: Boolean = true,
+
+    // Two-finger top swipe (notification center / control center)
+    val twoFingerTopSwipe: Boolean = true,
+    val topEdgeZoneRatio: Float = 0.25f,
+    val topEdgeThreshold: Float = 0.1f
 )
 
 class SettingsRepository(context: Context) {
@@ -97,7 +102,10 @@ class SettingsRepository(context: Context) {
         invertX             = prefs.getBoolean("invertX", false),
         invertY             = prefs.getBoolean("invertY", true),
         doubleTapIntervalMs = prefs.getInt("doubleTapIntervalMs", 100),
-        exclusiveGrab       = prefs.getBoolean("exclusiveGrab", true)
+        exclusiveGrab       = prefs.getBoolean("exclusiveGrab", true),
+        twoFingerTopSwipe   = prefs.getBoolean("twoFingerTopSwipe", true),
+        topEdgeZoneRatio    = prefs.getFloat("topEdgeZoneRatio", 0.25f),
+        topEdgeThreshold    = prefs.getFloat("topEdgeThreshold", 0.1f)
     )
 
     private fun save(s: TouchpadSettings) {
@@ -129,6 +137,9 @@ class SettingsRepository(context: Context) {
             putBoolean("invertY", s.invertY)
             putInt("doubleTapIntervalMs", s.doubleTapIntervalMs)
             putBoolean("exclusiveGrab", s.exclusiveGrab)
+            putBoolean("twoFingerTopSwipe", s.twoFingerTopSwipe)
+            putFloat("topEdgeZoneRatio", s.topEdgeZoneRatio)
+            putFloat("topEdgeThreshold", s.topEdgeThreshold)
         }.apply()
     }
 }

@@ -16,7 +16,7 @@ private const val TAP_MAX_MS         = 280L
 private const val TAP_MAX_MOVE_PX    = 180
 
 private enum class GestureState {
-    IDLE, SINGLE_MOVING, DRAG, SCROLL, EDGE_SWIPE, THREE_FINGER, PINCH_ZOOM
+    IDLE, SINGLE_MOVING, DRAG, SCROLL, EDGE_SWIPE, THREE_FINGER, PINCH_ZOOM, TOP_SWIPE
 }
 
 class GestureRecognizer(
@@ -71,6 +71,14 @@ class GestureRecognizer(
     private var pinchCurrentPadX0 = 0; private var pinchCurrentPadY0 = 0
     private var pinchCurrentPadX1 = 0; private var pinchCurrentPadY1 = 0
     private var pinchTrackingId0 = 0; private var pinchTrackingId1 = 0
+
+    // Two-finger top swipe state
+    private var topSwipeSide = false // true = right (控制中心), false = left (通知中心)
+    private var topSwipeTrackingId = 0
+    private var topSwipeDispX = 0       // anchor screen X
+    private var topSwipeDispY = 0       // anchor screen Y
+    private var topSwipeStartPadY = 0   // pad Y at gesture start
+    private var topSwipeTouchInjected = false
 
     private enum class ThreeFingerFinalizeReason {
         FINGER_DROP,
@@ -166,6 +174,11 @@ class GestureRecognizer(
                         state = GestureState.SINGLE_MOVING
                     }
 
+                    GestureState.TOP_SWIPE -> {
+                        NativeBridge.releaseAllTouches(touchFd, 1)
+                        state = GestureState.IDLE
+                    }
+
                     GestureState.SINGLE_MOVING, GestureState.DRAG -> {
                         val p = prevSlots[si]
                         // Only move cursor if the slot was active last frame, feature is enabled,
@@ -242,6 +255,28 @@ class GestureRecognizer(
                             NativeBridge.injectTouch(touchFd, pts, 1)
 
                             state = GestureState.EDGE_SWIPE
+                        } else if (s.twoFingerTopSwipe) {
+                            // Top edge swipe: fingers near the physical top pad-Y edge.
+                            val topPx = (s.padMaxY * s.topEdgeThreshold).toInt()
+                            val oneInTop = c0.y < topPx || c1.y < topPx
+
+                            if (oneInTop) {
+                                // Horizontal zone: left zone or right zone
+                                val zonePx = (s.padMaxX * s.topEdgeZoneRatio).toInt()
+                                val inLeft = c0.x < zonePx || c1.x < zonePx
+                                val inRight = c0.x >= s.padMaxX - zonePx || c1.x >= s.padMaxX - zonePx
+
+                                // Left takes priority
+                                if (inLeft) {
+                                    startTopSwipe(c0, c1, false, s)
+                                } else if (inRight) {
+                                    startTopSwipe(c0, c1, true, s)
+                                } else {
+                                    state = GestureState.SCROLL
+                                }
+                            } else {
+                                state = GestureState.SCROLL
+                            }
                         } else {
                             state = GestureState.SCROLL
                         }
@@ -344,6 +379,33 @@ class GestureRecognizer(
                             pinchCurrentPadX0 = c0.x; pinchCurrentPadY0 = c0.y
                             pinchCurrentPadX1 = c1.x; pinchCurrentPadY1 = c1.y
                             injectPinchTouch(s)
+                        }
+                    }
+
+                    GestureState.TOP_SWIPE -> {
+                        if (p0.active && p1.active && s.twoFingerTopSwipe) {
+                            val avgPadY = (c0.y + c1.y) / 2
+                            val deltaY = avgPadY - topSwipeStartPadY
+
+                            if (deltaY >= 10) {
+                                val uinputW = if (s.swapAxes) screenHeight else screenWidth
+                                val uinputH = if (s.swapAxes) screenWidth else screenHeight
+
+                                // Compute display coordinates (screen space), apply invertX/invertY
+                                val ratio = deltaY.toFloat() / s.padMaxY
+                                var dispY = (ratio * screenHeight).toInt().coerceIn(0, screenHeight - 1)
+                                if (s.invertY) dispY = screenHeight - 1 - dispY
+                                var dispX = topSwipeDispX
+                                if (s.invertX) dispX = screenWidth - 1 - dispX
+
+                                // Convert display (screen) -> uinput coordinates, same as EDGE_SWIPE
+                                val touchX = if (!s.swapAxes) dispX else dispY.coerceIn(0, uinputW - 1)
+                                val touchY = if (!s.swapAxes) dispY.coerceIn(0, uinputH - 1) else dispX.coerceIn(0, uinputH - 1)
+
+                                val pts = intArrayOf(0, touchX, touchY, topSwipeTrackingId)
+                                NativeBridge.injectTouch(touchFd, pts, 1)
+                                topSwipeTouchInjected = true
+                            }
                         }
                     }
 
@@ -457,6 +519,10 @@ class GestureRecognizer(
                 releasePinchTouches()
             }
 
+            GestureState.TOP_SWIPE -> {
+                NativeBridge.releaseAllTouches(touchFd, 1)
+            }
+
             GestureState.THREE_FINGER -> {
                 threeFingerAdapter.onGestureEnd(s)
                 maybeFireThreeFingerMiddleClick(s, prevActiveCount, duration, ThreeFingerFinalizeReason.ALL_FINGERS_UP)
@@ -497,6 +563,9 @@ class GestureRecognizer(
         }
         if (state == GestureState.PINCH_ZOOM) {
             releasePinchTouches()
+        }
+        if (state == GestureState.TOP_SWIPE) {
+            NativeBridge.releaseAllTouches(touchFd, 1)
         }
 
         pendingFirstTap = false
@@ -602,6 +671,20 @@ class GestureRecognizer(
         pinchCurrentPadX1 = c1.x; pinchCurrentPadY1 = c1.y
         state = GestureState.PINCH_ZOOM
         injectPinchTouch(s)
+    }
+
+    private fun startTopSwipe(c0: SlotSnapshot, c1: SlotSnapshot, isRight: Boolean, s: TouchpadSettings) {
+        nextTid++
+        topSwipeTrackingId = nextTid
+        topSwipeSide = isRight
+        topSwipeStartPadY = (c0.y + c1.y) / 2
+
+        // Injection anchor in screen coordinates: (10, 0) for left, (screenWidth-11, 0) for right
+        topSwipeDispX = if (isRight) screenWidth - 11 else 10
+        topSwipeDispY = 0
+        topSwipeTouchInjected = false
+
+        state = GestureState.TOP_SWIPE
     }
 
     /** Called from JNI when a EV_KEY event arrives. */
