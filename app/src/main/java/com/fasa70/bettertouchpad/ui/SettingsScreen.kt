@@ -62,8 +62,11 @@ fun SettingsScreen(repo: SettingsRepository) {
         FeatureSwitch("三指手势 (返回桌面/截图/分屏)", settings.threeFingerMove) {
             repo.update { copy(threeFingerMove = it) }
         }
+        FeatureSwitch("三指单击 (鼠标中键)", settings.threeFingerMiddleClick) {
+            repo.update { copy(threeFingerMiddleClick = it) }
+        }
         Text(
-            "三指上划-返回桌面；三指上划并横向划动-快切应用；三指下划-截图；三指横划-快捷分屏",
+            "三指上划和左右滑会映射到底部手势条注入（动画更自然）；三指下划保留系统触摸注入路径。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 4.dp)
@@ -182,7 +185,7 @@ fun SettingsScreen(repo: SettingsRepository) {
             repo.update { copy(exclusiveGrab = it) }
         }
         Text(
-            "开启后，触控板输入事件将被本应用独占，系统其他进程无法读取，以防止跟系统手势产生冲突。\n如过键盘连接异常，可尝试关闭此选项。",
+            "开启后，触控板输入事件将被本应用独占，系统其他进程无法读取，以防止跟系统手势产生冲突。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp)

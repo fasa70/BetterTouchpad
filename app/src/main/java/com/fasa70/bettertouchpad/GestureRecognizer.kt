@@ -1,10 +1,14 @@
 package com.fasa70.bettertouchpad
 
+import android.util.Log
+import com.fasa70.bettertouchpad.system.ThreeFingerActionAdapter
 import kotlin.math.sqrt
 
 // Linux input key codes
 private const val BTN_LEFT  = 0x110
 private const val BTN_RIGHT = 0x111
+private const val BTN_MIDDLE = 0x112
+private const val TAG = "GestureRecognizer"
 
 private const val TAP_MAX_MS         = 280L
 private const val TAP_MAX_MOVE_PX    = 180
@@ -18,7 +22,8 @@ class GestureRecognizer(
     private val mouseFd: Int,
     private val touchFd: Int,
     private val screenWidth: Int,
-    private val screenHeight: Int
+    private val screenHeight: Int,
+    private val threeFingerAdapter: ThreeFingerActionAdapter
 ) {
     private var state = GestureState.IDLE
 
@@ -36,10 +41,13 @@ class GestureRecognizer(
     // True when we transitioned from SCROLL to SINGLE_MOVING (trailing finger after scroll/tap)
     // — suppress cursor movement for this residual finger
     private var trailingAfterScroll = false
+    // After finishing a three-finger gesture on finger-drop, ignore residual contacts
+    // until all fingers lift to avoid accidental 2-finger gesture re-entry.
+    private var suppressResidualAfterThreeFinger = false
 
     private var nextTid = 100
 
-    private var threeActiveIdx    = intArrayOf(0, 1, 2)
+    private var threeActiveIdx = intArrayOf(0, 1, 2)
     // Centroid of the 3 fingers on the touchpad at gesture start
     private var threeCentroidPadX = 0
     private var threeCentroidPadY = 0
@@ -51,10 +59,15 @@ class GestureRecognizer(
     private var scrollAccV = 0f
     private var scrollAccH = 0f
 
-    private var edgeRight = false   // true = started from right edge
+    private var edgeRight = false // true = started from right edge
     // Fixed edge-swipe injection point in uinput coordinates (set when gesture starts)
     private var edgeFixedUiX = 0
     private var edgeFixedUiY = 0
+
+    private enum class ThreeFingerFinalizeReason {
+        FINGER_DROP,
+        ALL_FINGERS_UP
+    }
 
     data class SlotSnapshot(val active: Boolean, val trackingId: Int, val x: Int, val y: Int)
 
@@ -70,9 +83,17 @@ class GestureRecognizer(
         val cur = Array(slotCount) { i ->
             SlotSnapshot(slotActive[i] != 0, trackingIds[i], xs[i], ys[i])
         }
-        val activeCount     = cur.count { it.active }
+        val activeCount = cur.count { it.active }
         val prevActiveCount = prevSlots.take(slotCount).count { it.active }
-        val fingersAdded    = activeCount > prevActiveCount
+        val fingersAdded = activeCount > prevActiveCount
+
+        maybeFinalizeThreeFingerOnFingerDrop(activeCount, prevActiveCount, now, s)
+
+        if (suppressResidualAfterThreeFinger && activeCount > 0) {
+            Log.d(TAG, "suppress residual contacts after three-finger: active=$activeCount")
+            for (i in cur.indices) prevSlots[i] = cur[i]
+            return
+        }
 
         when {
             // ──── 0 fingers ────────────────────────────────────────────────
@@ -82,6 +103,7 @@ class GestureRecognizer(
                 accX = 0f; accY = 0f
                 scrollAccV = 0f; scrollAccH = 0f
                 trailingAfterScroll = false
+                suppressResidualAfterThreeFinger = false
             }
 
             // ──── 1 finger ─────────────────────────────────────────────────
@@ -97,7 +119,8 @@ class GestureRecognizer(
                             // Check if this is the 2nd tap of a double-tap drag
                             state = if (s.doubleTapDrag
                                 && pendingFirstTap
-                                && (now - firstTapUpMs) < s.doubleTapIntervalMs) {
+                                && (now - firstTapUpMs) < s.doubleTapIntervalMs
+                            ) {
                                 // 2nd tap: send left-down for drag (do NOT send click on 1st tap)
                                 pendingFirstTap = false
                                 NativeBridge.sendMouseButton(mouseFd, BTN_LEFT, true)
@@ -148,6 +171,7 @@ class GestureRecognizer(
                             }
                         }
                     }
+
                     else -> {}
                 }
             }
@@ -173,9 +197,9 @@ class GestureRecognizer(
 
                         // Edge swipe detection: fingers near the physical left/right pad-X edge.
                         val padMaxX = s.padMaxX.toFloat()
-                        val edgePx  = (padMaxX * s.edgeThreshold).toInt()
+                        val edgePx = (padMaxX * s.edgeThreshold).toInt()
                         val bothRight = c0.x > padMaxX - edgePx && c1.x > padMaxX - edgePx
-                        val bothLeft  = c0.x < edgePx            && c1.x < edgePx
+                        val bothLeft = c0.x < edgePx && c1.x < edgePx
 
                         if (s.edgeSwipe && (bothRight || bothLeft)) {
                             edgeRight = bothRight
@@ -185,10 +209,10 @@ class GestureRecognizer(
                             // The touch slides along display_X (inward from edge),
                             // display_Y is fixed at screen vertical center.
                             val uinputW = if (s.swapAxes) screenHeight else screenWidth
-                            val uinputH = if (s.swapAxes) screenWidth  else screenHeight
+                            val uinputH = if (s.swapAxes) screenWidth else screenHeight
 
                             // display_X: start at the screen edge (0 for left, screenWidth-1 for right)
-                            var dispX = if (bothRight) {
+                            val dispX = if (bothRight) {
                                 if (s.invertX) 0 else screenWidth - 1
                             } else {
                                 if (s.invertX) screenWidth - 1 else 0
@@ -229,7 +253,7 @@ class GestureRecognizer(
                     GestureState.EDGE_SWIPE -> {
                         if (p0.active && p1.active && s.edgeSwipe) {
                             val uinputW = if (s.swapAxes) screenHeight else screenWidth
-                            val uinputH = if (s.swapAxes) screenWidth  else screenHeight
+                            val uinputH = if (s.swapAxes) screenWidth else screenHeight
 
                             // The sliding axis is display_X (inward from edge).
                             // Compute movement delta along display_X from finger movement on pad_X.
@@ -271,64 +295,11 @@ class GestureRecognizer(
                     GestureState.DRAG,
                     GestureState.SCROLL,
                     GestureState.EDGE_SWIPE -> {
-                        if (state == GestureState.DRAG)
-                            NativeBridge.sendMouseButton(mouseFd, BTN_LEFT, false)
-                        if (state == GestureState.EDGE_SWIPE)
-                            NativeBridge.releaseAllTouches(touchFd, 1)
-
-                        pendingFirstTap = false
-                        state = GestureState.THREE_FINGER
-                        downTimeMs = now
-                        nextTid++
-                        threeActiveIdx = ai.toIntArray()
-
-                        // Record centroid pad position at gesture start
-                        threeCentroidPadX = ai.sumOf { cur[it].x } / 3
-                        threeCentroidPadY = ai.sumOf { cur[it].y } / 3
-
-                        if (s.threeFingerMove) {
-                            val uinputW = if (s.swapAxes) screenHeight else screenWidth
-                            val uinputH = if (s.swapAxes) screenWidth  else screenHeight
-                            val pts = IntArray(4 * 3)
-                            for (i in 0..2) {
-                                pts[i*4+0] = i
-                                pts[i*4+1] = uinputW / 2 + (i - 1) * 100
-                                pts[i*4+2] = uinputH / 2
-                                pts[i*4+3] = nextTid + i
-                            }
-                            NativeBridge.injectTouch(touchFd, pts, 3)
-                        }
+                        enterThreeFingerGesture(cur, ai, now, s)
                     }
 
                     GestureState.THREE_FINGER -> {
-                        if (s.threeFingerMove) {
-                            val uinputW = if (s.swapAxes) screenHeight else screenWidth
-                            val uinputH = if (s.swapAxes) screenWidth  else screenHeight
-
-                            val curCentX = threeActiveIdx.sumOf { cur[it].x } / 3
-                            val curCentY = threeActiveIdx.sumOf { cur[it].y } / 3
-
-                            val sp = s.touchInjectSpeed
-                            var dispDx = ((curCentX - threeCentroidPadX).toFloat() / s.padMaxX * screenWidth  * sp).toInt()
-                            var dispDy = ((curCentY - threeCentroidPadY).toFloat() / s.padMaxY * screenHeight * sp).toInt()
-
-                            if (s.invertX) dispDx = -dispDx
-                            if (s.invertY) dispDy = -dispDy
-
-                            val uiDx = if (!s.swapAxes) dispDx else dispDy
-                            val uiDy = if (!s.swapAxes) dispDy else dispDx
-
-                            val pts = IntArray(4 * 3)
-                            for (i in 0..2) {
-                                val finalX = (uinputW / 2 + (i - 1) * 100 + uiDx).coerceIn(0, uinputW - 1)
-                                val finalY = (uinputH / 2 + uiDy).coerceIn(0, uinputH - 1)
-                                pts[i*4+0] = i
-                                pts[i*4+1] = finalX
-                                pts[i*4+2] = finalY
-                                pts[i*4+3] = nextTid + i
-                            }
-                            NativeBridge.injectTouch(touchFd, pts, 3)
-                        }
+                        updateThreeFingerGesture(cur, now, s)
                     }
 
                     else -> {}
@@ -358,11 +329,13 @@ class GestureRecognizer(
             GestureState.DRAG -> {
                 NativeBridge.sendMouseButton(mouseFd, BTN_LEFT, false)
             }
+
             GestureState.SINGLE_MOVING -> {
                 // Only treat as a single-finger tap if this was a real single-finger gesture
                 // (not a trailing finger after scroll, which is now tracked by trailingAfterScroll)
                 if (!trailingAfterScroll && s.singleFingerTap
-                    && prevActiveCount == 1 && duration < TAP_MAX_MS) {
+                    && prevActiveCount == 1 && duration < TAP_MAX_MS
+                ) {
                     val si = prevSlots.indexOfFirst { it.active }
                     if (si >= 0) {
                         val dx = prevSlots[si].x - startSlots[si].x
@@ -391,6 +364,7 @@ class GestureRecognizer(
                     }
                 }
             }
+
             GestureState.SCROLL -> {
                 // Both fingers lifted simultaneously without going through the 1-finger transition
                 if (s.twoFingerTap && prevActiveCount == 2 && duration < TAP_MAX_MS) {
@@ -407,14 +381,108 @@ class GestureRecognizer(
                     }
                 }
             }
+
             GestureState.EDGE_SWIPE -> {
                 NativeBridge.releaseAllTouches(touchFd, 1)
             }
+
             GestureState.THREE_FINGER -> {
-                NativeBridge.releaseAllTouches(touchFd, 3)
+                threeFingerAdapter.onGestureEnd(s)
+                maybeFireThreeFingerMiddleClick(s, prevActiveCount, duration, ThreeFingerFinalizeReason.ALL_FINGERS_UP)
             }
+
             else -> {}
         }
+    }
+
+    private fun maybeFinalizeThreeFingerOnFingerDrop(
+        activeCount: Int,
+        prevActiveCount: Int,
+        now: Long,
+        s: TouchpadSettings
+    ) {
+        if (state != GestureState.THREE_FINGER || activeCount >= 3) return
+
+        val duration = now - downTimeMs
+        Log.d(TAG, "three-finger finalize on drop: prev=$prevActiveCount, duration=$duration")
+        threeFingerAdapter.onGestureEnd(s)
+        maybeFireThreeFingerMiddleClick(s, prevActiveCount, duration, ThreeFingerFinalizeReason.FINGER_DROP)
+        state = GestureState.IDLE
+        trailingAfterScroll = false
+        suppressResidualAfterThreeFinger = true
+    }
+
+    private fun enterThreeFingerGesture(
+        cur: Array<SlotSnapshot>,
+        activeIdx: List<Int>,
+        now: Long,
+        s: TouchpadSettings
+    ) {
+        if (state == GestureState.DRAG) {
+            NativeBridge.sendMouseButton(mouseFd, BTN_LEFT, false)
+        }
+        if (state == GestureState.EDGE_SWIPE) {
+            NativeBridge.releaseAllTouches(touchFd, 1)
+        }
+
+        pendingFirstTap = false
+        state = GestureState.THREE_FINGER
+        downTimeMs = now
+        nextTid++
+        threeActiveIdx = activeIdx.toIntArray()
+        threeCentroidPadX = activeIdx.sumOf { cur[it].x } / 3
+        threeCentroidPadY = activeIdx.sumOf { cur[it].y } / 3
+        threeFingerAdapter.onGestureStart(s, nextTid)
+    }
+
+    private fun updateThreeFingerGesture(cur: Array<SlotSnapshot>, now: Long, s: TouchpadSettings) {
+        val rawDisp = computeThreeFingerRawDisp(cur, s)
+        threeFingerAdapter.onGestureMove(s, now, rawDisp.first, rawDisp.second)
+    }
+
+    private fun computeThreeFingerRawDisp(cur: Array<SlotSnapshot>, s: TouchpadSettings): Pair<Int, Int> {
+        val curCentX = threeActiveIdx.sumOf { cur[it].x } / 3
+        val curCentY = threeActiveIdx.sumOf { cur[it].y } / 3
+        val rawDispDx = ((curCentX - threeCentroidPadX).toFloat() / s.padMaxX * screenWidth).toInt()
+        val rawDispDy = ((curCentY - threeCentroidPadY).toFloat() / s.padMaxY * screenHeight).toInt()
+        return Pair(rawDispDx, rawDispDy)
+    }
+
+    private fun maybeFireThreeFingerMiddleClick(
+        s: TouchpadSettings,
+        prevActiveCount: Int,
+        duration: Long,
+        reason: ThreeFingerFinalizeReason
+    ) {
+        val directionalConsumed = threeFingerAdapter.consumedAsDirectionalAction()
+        if (!s.threeFingerMiddleClick || prevActiveCount < 3 || duration >= TAP_MAX_MS || directionalConsumed) {
+            Log.d(
+                TAG,
+                "three-finger middle skipped: reason=$reason enabled=${s.threeFingerMiddleClick} prev=$prevActiveCount duration=$duration consumed=$directionalConsumed"
+            )
+            return
+        }
+
+        val ai = prevSlots.indices.filter { prevSlots[it].active }.take(3)
+        if (ai.size != 3) {
+            Log.d(TAG, "three-finger middle skipped: reason=$reason invalid-active-size=${ai.size}")
+            return
+        }
+
+        val endCentX = ai.sumOf { prevSlots[it].x } / 3
+        val endCentY = ai.sumOf { prevSlots[it].y } / 3
+        val rawDispDx = ((endCentX - threeCentroidPadX).toFloat() / s.padMaxX * screenWidth).toInt()
+        val rawDispDy = ((endCentY - threeCentroidPadY).toFloat() / s.padMaxY * screenHeight).toInt()
+        val move = sqrt((rawDispDx * rawDispDx + rawDispDy * rawDispDy).toDouble())
+        if (move >= TAP_MAX_MOVE_PX) {
+            Log.d(TAG, "three-finger middle skipped: reason=$reason move=$move")
+            return
+        }
+
+        Log.d(TAG, "three-finger middle fired: reason=$reason move=$move")
+        NativeBridge.sendMouseButton(mouseFd, BTN_MIDDLE, true)
+        Thread.sleep(16)
+        NativeBridge.sendMouseButton(mouseFd, BTN_MIDDLE, false)
     }
 
     /** Called from JNI when a EV_KEY event arrives. */

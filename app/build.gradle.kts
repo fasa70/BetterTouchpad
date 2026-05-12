@@ -3,7 +3,6 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
-
 android {
     namespace = "com.fasa70.bettertouchpad"
     compileSdk {
@@ -15,7 +14,7 @@ android {
         minSdk = 28
         targetSdk = 36
         versionCode = 4
-        versionName = "1.1.2"
+        versionName = "1.1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
