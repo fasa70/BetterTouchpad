@@ -133,3 +133,9 @@ BetterTouchpad 是一个运行在 Android 设备上的 **Root 级 Native 守护�
 
 本项目需要 Root 权限，请确保了解相关风险后再使用。
 因使用本软件造成的任何问题，开发者不承担责任。
+
+---
+
+## 许可证
+
+本项目基于 [MIT License](LICENSE) 开源。
