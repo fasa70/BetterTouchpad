@@ -12,7 +12,10 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
+import com.fasa70.bettertouchpad.system.LegacyThreeFingerAdapter
 import com.fasa70.bettertouchpad.system.NavigationBarThreeFingerAdapter
+import com.fasa70.bettertouchpad.system.ThreeFingerActionAdapter
+import com.fasa70.bettertouchpad.system.ThreeFingerMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -208,7 +211,10 @@ class TouchpadService : Service() {
                 }
 
                 // Step 6: Attach gesture recognizer callback
-                val threeFingerAdapter = NavigationBarThreeFingerAdapter(touchFd, w, h)
+                val threeFingerAdapter: ThreeFingerActionAdapter = when (settings.get().threeFingerMode) {
+                    ThreeFingerMode.LEGACY -> LegacyThreeFingerAdapter(touchFd, w, h)
+                    ThreeFingerMode.NAVBAR -> NavigationBarThreeFingerAdapter(touchFd, w, h)
+                }
                 val recognizer = GestureRecognizer(
                     settings = settings,
                     mouseFd = mouseFd,

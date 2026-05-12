@@ -2,6 +2,7 @@ package com.fasa70.bettertouchpad
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.fasa70.bettertouchpad.system.ThreeFingerMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +21,7 @@ data class TouchpadSettings(
     val twoFingerScroll: Boolean = true,
     val edgeSwipe: Boolean = true,
     val threeFingerMove: Boolean = true,
+    val threeFingerMode: ThreeFingerMode = ThreeFingerMode.LEGACY,
     val threeFingerMiddleClick: Boolean = true,
     val naturalScroll: Boolean = true,
 
@@ -74,6 +76,9 @@ class SettingsRepository(context: Context) {
         twoFingerScroll     = prefs.getBoolean("twoFingerScroll", true),
         edgeSwipe           = prefs.getBoolean("edgeSwipe", true),
         threeFingerMove     = prefs.getBoolean("threeFingerMove", true),
+        threeFingerMode     = prefs.getString("threeFingerMode", "LEGACY")
+            ?.let { runCatching { ThreeFingerMode.valueOf(it) }.getOrNull() }
+            ?: ThreeFingerMode.LEGACY,
         threeFingerMiddleClick = prefs.getBoolean("threeFingerMiddleClick", true),
         naturalScroll       = prefs.getBoolean("naturalScroll", true),
         cursorSensitivity   = prefs.getFloat("cursorSensitivity", 0.7f),
@@ -101,6 +106,7 @@ class SettingsRepository(context: Context) {
             putBoolean("twoFingerScroll", s.twoFingerScroll)
             putBoolean("edgeSwipe", s.edgeSwipe)
             putBoolean("threeFingerMove", s.threeFingerMove)
+            putString("threeFingerMode", s.threeFingerMode.name)
             putBoolean("threeFingerMiddleClick", s.threeFingerMiddleClick)
             putBoolean("naturalScroll", s.naturalScroll)
             putFloat("cursorSensitivity", s.cursorSensitivity)

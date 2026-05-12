@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fasa70.bettertouchpad.SettingsRepository
+import com.fasa70.bettertouchpad.system.ThreeFingerMode
 
 @Composable
 fun SettingsScreen(repo: SettingsRepository) {
@@ -65,8 +66,43 @@ fun SettingsScreen(repo: SettingsRepository) {
         FeatureSwitch("三指单击 (鼠标中键)", settings.threeFingerMiddleClick) {
             repo.update { copy(threeFingerMiddleClick = it) }
         }
+        if (settings.threeFingerMove) {
+            Text(
+                "三指手势模式（切换后需重启服务生效）",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { repo.update { copy(threeFingerMode = ThreeFingerMode.LEGACY) } }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = settings.threeFingerMode == ThreeFingerMode.LEGACY,
+                    onClick = { repo.update { copy(threeFingerMode = ThreeFingerMode.LEGACY) } }
+                )
+                Text("屏幕中央三点触摸 (HyperOS 推荐)", modifier = Modifier.padding(start = 8.dp))
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { repo.update { copy(threeFingerMode = ThreeFingerMode.NAVBAR) } }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = settings.threeFingerMode == ThreeFingerMode.NAVBAR,
+                    onClick = { repo.update { copy(threeFingerMode = ThreeFingerMode.NAVBAR) } }
+                )
+                Text("底部手势条 (通用模式)", modifier = Modifier.padding(start = 8.dp))
+            }
+        }
         Text(
-            "三指上划和左右滑会映射到底部手势条注入（动画更自然）；三指下划保留系统触摸注入路径。",
+            "屏幕中央三点触摸：三指在屏幕中央注入三指触控，适合澎湃系统。\n" +
+                "底部手势条：三指映射到底部导航栏手势条，适合非澎湃系统。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 4.dp)
