@@ -10,6 +10,8 @@ import kotlin.math.sqrt
 private const val BTN_LEFT  = 0x110
 private const val BTN_RIGHT = 0x111
 private const val BTN_MIDDLE = 0x112
+private const val BTN_SIDE = 0x113
+private const val BTN_EXTRA = 0x114
 private const val TAG = "GestureRecognizer"
 
 private const val TAP_MAX_MS         = 280L
@@ -18,7 +20,7 @@ private const val THREE_FINGER_DELAY_MS = 100L
 private const val THREE_FINGER_MOVE_THRESHOLD_PX = 40
 
 private enum class GestureState {
-    IDLE, SINGLE_MOVING, DRAG, SCROLL, EDGE_SWIPE, THREE_FINGER, PINCH_ZOOM, TOP_SWIPE
+    IDLE, SINGLE_MOVING, DRAG, SCROLL, EDGE_SWIPE, THREE_FINGER, PINCH_ZOOM, TOP_SWIPE, BOTTOM_SWIPE
 }
 
 class GestureRecognizer(
@@ -81,6 +83,14 @@ class GestureRecognizer(
     private var topSwipeDispY = 0       // anchor screen Y
     private var topSwipeStartPadY = 0   // pad Y at gesture start
     private var topSwipeTouchInjected = false
+
+    // Two-finger bottom swipe state
+    private var bottomSwipeSide = false  // true = right (前进), false = left (后退)
+    private var bottomSwipeTrackingId = 0
+    private var bottomSwipeDispX = 0      // anchor screen X
+    private var bottomSwipeDispY = 0      // anchor screen Y
+    private var bottomSwipeStartPadY = 0  // pad Y at gesture start
+    private var bottomSwipeTouchInjected = false
 
     private enum class ThreeFingerFinalizeReason {
         FINGER_DROP,
@@ -186,6 +196,11 @@ class GestureRecognizer(
                         state = GestureState.IDLE
                     }
 
+                    GestureState.BOTTOM_SWIPE -> {
+                        NativeBridge.releaseAllTouches(touchFd, 1)
+                        state = GestureState.IDLE
+                    }
+
                     GestureState.SINGLE_MOVING, GestureState.DRAG -> {
                         val p = prevSlots[si]
                         // Only move cursor if the slot was active last frame, feature is enabled,
@@ -282,8 +297,10 @@ class GestureRecognizer(
                                     state = GestureState.SCROLL
                                 }
                             } else {
-                                state = GestureState.SCROLL
+                                tryBottomSwipe(c0, c1, s)
                             }
+                        } else if (s.twoFingerBottomSwipe) {
+                            tryBottomSwipe(c0, c1, s)
                         } else {
                             state = GestureState.SCROLL
                         }
@@ -416,6 +433,34 @@ class GestureRecognizer(
                         }
                     }
 
+                    GestureState.BOTTOM_SWIPE -> {
+                        if (p0.active && p1.active && s.twoFingerBottomSwipe) {
+                            val avgPadY = (c0.y + c1.y) / 2
+                            val deltaY = avgPadY - bottomSwipeStartPadY
+
+                            // Bottom swipe: finger moves upward (deltaY < 0)
+                            if (deltaY <= -10) {
+                                val uinputW = if (s.swapAxes) screenHeight else screenWidth
+                                val uinputH = if (s.swapAxes) screenWidth else screenHeight
+
+                                // Compute display coordinates, upward from bottom of screen
+                                val ratio = (-deltaY).toFloat() / s.padMaxY
+                                var dispY = (screenHeight - 1 - (ratio * screenHeight).toInt()).coerceIn(0, screenHeight - 1)
+                                if (s.invertY) dispY = screenHeight - 1 - dispY
+                                var dispX = bottomSwipeDispX
+                                if (s.invertX) dispX = screenWidth - 1 - dispX
+
+                                // Convert display (screen) -> uinput coordinates
+                                val touchX = if (!s.swapAxes) dispX else dispY.coerceIn(0, uinputW - 1)
+                                val touchY = if (!s.swapAxes) dispY.coerceIn(0, uinputH - 1) else dispX.coerceIn(0, uinputH - 1)
+
+                                val pts = intArrayOf(0, touchX, touchY, bottomSwipeTrackingId)
+                                NativeBridge.injectTouch(touchFd, pts, 1)
+                                bottomSwipeTouchInjected = true
+                            }
+                        }
+                    }
+
                     else -> {}
                 }
             }
@@ -530,6 +575,10 @@ class GestureRecognizer(
                 NativeBridge.releaseAllTouches(touchFd, 1)
             }
 
+            GestureState.BOTTOM_SWIPE -> {
+                NativeBridge.releaseAllTouches(touchFd, 1)
+            }
+
             GestureState.THREE_FINGER -> {
                 if (threeFingerInjectionStarted) {
                     threeFingerAdapter.onGestureEnd(s)
@@ -576,6 +625,9 @@ class GestureRecognizer(
             releasePinchTouches()
         }
         if (state == GestureState.TOP_SWIPE) {
+            NativeBridge.releaseAllTouches(touchFd, 1)
+        }
+        if (state == GestureState.BOTTOM_SWIPE) {
             NativeBridge.releaseAllTouches(touchFd, 1)
         }
 
@@ -708,6 +760,45 @@ class GestureRecognizer(
         topSwipeTouchInjected = false
 
         state = GestureState.TOP_SWIPE
+    }
+
+    private fun tryBottomSwipe(c0: SlotSnapshot, c1: SlotSnapshot, s: TouchpadSettings) {
+        val bottomPx = (s.padMaxY * (1f - s.bottomEdgeThreshold)).toInt()
+        val oneInBottom = c0.y > bottomPx || c1.y > bottomPx
+
+        if (oneInBottom) {
+            val zonePx = (s.padMaxX * s.bottomEdgeZoneRatio).toInt()
+            val inLeft = c0.x < zonePx || c1.x < zonePx
+            val inRight = c0.x >= s.padMaxX - zonePx || c1.x >= s.padMaxX - zonePx
+
+            if (inLeft) {
+                startBottomSwipe(c0, c1, false, s)
+            } else if (inRight) {
+                startBottomSwipe(c0, c1, true, s)
+            } else {
+                state = GestureState.SCROLL
+            }
+        } else {
+            state = GestureState.SCROLL
+        }
+    }
+
+    private fun startBottomSwipe(c0: SlotSnapshot, c1: SlotSnapshot, isRight: Boolean, s: TouchpadSettings) {
+        nextTid++
+        bottomSwipeTrackingId = nextTid
+        bottomSwipeSide = isRight
+        bottomSwipeStartPadY = (c0.y + c1.y) / 2
+
+        // Fire mouse side button immediately on gesture start
+        val btn = if (isRight) BTN_EXTRA else BTN_SIDE
+        NativeBridge.sendMouseButton(mouseFd, btn, true)
+
+        // Injection anchor in screen coordinates: (10, screenHeight-1) for left, (screenWidth-11, screenHeight-1) for right
+        bottomSwipeDispX = if (isRight) screenWidth - 11 else 10
+        bottomSwipeDispY = screenHeight - 1
+        bottomSwipeTouchInjected = false
+
+        state = GestureState.BOTTOM_SWIPE
     }
 
     /** Called from JNI when a EV_KEY event arrives. */

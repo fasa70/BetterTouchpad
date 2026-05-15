@@ -57,7 +57,12 @@ data class TouchpadSettings(
     // Two-finger top swipe (notification center / control center)
     val twoFingerTopSwipe: Boolean = true,
     val topEdgeZoneRatio: Float = 0.15f,
-    val topEdgeThreshold: Float = 0.05f
+    val topEdgeThreshold: Float = 0.05f,
+
+    // Two-finger bottom swipe (mouse back/forward)
+    val twoFingerBottomSwipe: Boolean = true,
+    val bottomEdgeZoneRatio: Float = 0.15f,
+    val bottomEdgeThreshold: Float = 0.05f
 )
 
 class SettingsRepository(context: Context) {
@@ -109,7 +114,10 @@ class SettingsRepository(context: Context) {
         exclusiveGrab       = prefs.getBoolean("exclusiveGrab", true),
         twoFingerTopSwipe   = prefs.getBoolean("twoFingerTopSwipe", true),
         topEdgeZoneRatio    = prefs.getFloat("topEdgeZoneRatio", 0.25f),
-        topEdgeThreshold    = prefs.getFloat("topEdgeThreshold", 0.1f)
+        topEdgeThreshold    = prefs.getFloat("topEdgeThreshold", 0.1f),
+        twoFingerBottomSwipe = prefs.getBoolean("twoFingerBottomSwipe", true),
+        bottomEdgeZoneRatio = prefs.getFloat("bottomEdgeZoneRatio", 0.25f),
+        bottomEdgeThreshold = prefs.getFloat("bottomEdgeThreshold", 0.1f)
     )
 
     private fun save(s: TouchpadSettings) {
@@ -145,6 +153,9 @@ class SettingsRepository(context: Context) {
             putBoolean("twoFingerTopSwipe", s.twoFingerTopSwipe)
             putFloat("topEdgeZoneRatio", s.topEdgeZoneRatio)
             putFloat("topEdgeThreshold", s.topEdgeThreshold)
+            putBoolean("twoFingerBottomSwipe", s.twoFingerBottomSwipe)
+            putFloat("bottomEdgeZoneRatio", s.bottomEdgeZoneRatio)
+            putFloat("bottomEdgeThreshold", s.bottomEdgeThreshold)
         }.apply()
     }
 }

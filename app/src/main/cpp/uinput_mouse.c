@@ -43,6 +43,8 @@ Java_com_fasa70_bettertouchpad_NativeBridge_createMouseDevice(JNIEnv *env, jobje
     ioctl(fd, UI_SET_KEYBIT, BTN_LEFT);
     ioctl(fd, UI_SET_KEYBIT, BTN_RIGHT);
     ioctl(fd, UI_SET_KEYBIT, BTN_MIDDLE);
+    ioctl(fd, UI_SET_KEYBIT, BTN_SIDE);
+    ioctl(fd, UI_SET_KEYBIT, BTN_EXTRA);
 
     ioctl(fd, UI_SET_EVBIT, EV_REL);
     ioctl(fd, UI_SET_RELBIT, REL_X);

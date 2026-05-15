@@ -67,6 +67,9 @@ fun GestureSettingsTab(repo: SettingsRepository) {
         FeatureSwitch("双指顶部下滑（通知中心/控制中心）", settings.twoFingerTopSwipe) {
             repo.update { copy(twoFingerTopSwipe = it) }
         }
+        FeatureSwitch("双指底部上划（鼠标后退/前进键）", settings.twoFingerBottomSwipe) {
+            repo.update { copy(twoFingerBottomSwipe = it) }
+        }
 
         SectionTitle("三指手势")
         FeatureSwitch("三指单击 (鼠标中键)", settings.threeFingerMiddleClick) {
@@ -218,8 +221,22 @@ fun TouchSettingsTab(repo: SettingsRepository) {
             onValueChange = { repo.update { copy(topEdgeThreshold = it) } },
             onDone = { focusManager.clearFocus() }
         )
+        SensitivityRow(
+            label = "底部手势触发区域宽度 (占X轴比例)",
+            value = settings.bottomEdgeZoneRatio,
+            range = 0.01f..0.50f,
+            onValueChange = { repo.update { copy(bottomEdgeZoneRatio = it) } },
+            onDone = { focusManager.clearFocus() }
+        )
+        SensitivityRow(
+            label = "底部手势触发区域高度 (占Y轴比例)",
+            value = settings.bottomEdgeThreshold,
+            range = 0.01f..0.30f,
+            onValueChange = { repo.update { copy(bottomEdgeThreshold = it) } },
+            onDone = { focusManager.clearFocus() }
+        )
         Text(
-            "双指从触控板顶部触发区下滑：左侧触发通知中心，右侧触发控制中心。",
+            "双指从触控板顶部触发区下滑：左侧触发通知中心，右侧触发控制中心。\n双指从触控板底部触发区上划：左侧触发鼠标后退键，右侧触发鼠标前进键。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp)
