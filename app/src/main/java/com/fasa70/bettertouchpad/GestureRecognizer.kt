@@ -639,6 +639,15 @@ class GestureRecognizer(
         threeActiveIdx = activeIdx.toIntArray()
         threeCentroidPadX = activeIdx.sumOf { cur[it].x } / 3
         threeCentroidPadY = activeIdx.sumOf { cur[it].y } / 3
+
+        // 后台延迟注入：不依赖 onFrame 持续调用（手指不动时 evdev 不产生新事件）
+        Thread {
+            Thread.sleep(THREE_FINGER_DELAY_MS)
+            if (!threeFingerInjectionStarted && state == GestureState.THREE_FINGER) {
+                threeFingerAdapter.onGestureStart(s, nextTid)
+                threeFingerInjectionStarted = true
+            }
+        }.start()
     }
 
     private fun updateThreeFingerGesture(cur: Array<SlotSnapshot>, now: Long, s: TouchpadSettings) {
