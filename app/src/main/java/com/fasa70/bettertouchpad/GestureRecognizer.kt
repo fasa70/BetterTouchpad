@@ -14,6 +14,8 @@ private const val TAG = "GestureRecognizer"
 
 private const val TAP_MAX_MS         = 280L
 private const val TAP_MAX_MOVE_PX    = 180
+private const val THREE_FINGER_DELAY_MS = 100L
+private const val THREE_FINGER_MOVE_THRESHOLD_PX = 40
 
 private enum class GestureState {
     IDLE, SINGLE_MOVING, DRAG, SCROLL, EDGE_SWIPE, THREE_FINGER, PINCH_ZOOM, TOP_SWIPE
@@ -85,6 +87,10 @@ class GestureRecognizer(
         ALL_FINGERS_UP
     }
 
+    // Three-finger delayed injection state
+    private var threeFingerDownTimeMs: Long = 0L
+    private var threeFingerInjectionStarted = false
+
     data class SlotSnapshot(val active: Boolean, val trackingId: Int, val x: Int, val y: Int)
 
     /** Called from JNI on every SYN_REPORT. All arrays have [slotCount] entries. */
@@ -120,6 +126,7 @@ class GestureRecognizer(
                 scrollAccV = 0f; scrollAccH = 0f
                 trailingAfterScroll = false
                 suppressResidualAfterThreeFinger = false
+                threeFingerInjectionStarted = false
             }
 
             // ──── 1 finger ─────────────────────────────────────────────────
@@ -524,7 +531,9 @@ class GestureRecognizer(
             }
 
             GestureState.THREE_FINGER -> {
-                threeFingerAdapter.onGestureEnd(s)
+                if (threeFingerInjectionStarted) {
+                    threeFingerAdapter.onGestureEnd(s)
+                }
                 maybeFireThreeFingerMiddleClick(s, prevActiveCount, duration, ThreeFingerFinalizeReason.ALL_FINGERS_UP)
             }
 
@@ -542,7 +551,9 @@ class GestureRecognizer(
 
         val duration = now - downTimeMs
         Log.d(TAG, "three-finger finalize on drop: prev=$prevActiveCount, duration=$duration")
-        threeFingerAdapter.onGestureEnd(s)
+        if (threeFingerInjectionStarted) {
+            threeFingerAdapter.onGestureEnd(s)
+        }
         maybeFireThreeFingerMiddleClick(s, prevActiveCount, duration, ThreeFingerFinalizeReason.FINGER_DROP)
         state = GestureState.IDLE
         trailingAfterScroll = false
@@ -571,16 +582,28 @@ class GestureRecognizer(
         pendingFirstTap = false
         state = GestureState.THREE_FINGER
         downTimeMs = now
+        threeFingerDownTimeMs = now
+        threeFingerInjectionStarted = false
         nextTid++
         threeActiveIdx = activeIdx.toIntArray()
         threeCentroidPadX = activeIdx.sumOf { cur[it].x } / 3
         threeCentroidPadY = activeIdx.sumOf { cur[it].y } / 3
-        threeFingerAdapter.onGestureStart(s, nextTid)
     }
 
     private fun updateThreeFingerGesture(cur: Array<SlotSnapshot>, now: Long, s: TouchpadSettings) {
-        val rawDisp = computeThreeFingerRawDisp(cur, s)
-        threeFingerAdapter.onGestureMove(s, now, rawDisp.first, rawDisp.second)
+        if (!threeFingerInjectionStarted) {
+            val duration = now - threeFingerDownTimeMs
+            val rawDisp = computeThreeFingerRawDisp(cur, s)
+            val move = sqrt((rawDisp.first * rawDisp.first + rawDisp.second * rawDisp.second).toDouble())
+            if (duration >= THREE_FINGER_DELAY_MS || move > THREE_FINGER_MOVE_THRESHOLD_PX) {
+                threeFingerAdapter.onGestureStart(s, nextTid)
+                threeFingerInjectionStarted = true
+            }
+        }
+        if (threeFingerInjectionStarted) {
+            val rawDisp = computeThreeFingerRawDisp(cur, s)
+            threeFingerAdapter.onGestureMove(s, now, rawDisp.first, rawDisp.second)
+        }
     }
 
     private fun computeThreeFingerRawDisp(cur: Array<SlotSnapshot>, s: TouchpadSettings): Pair<Int, Int> {
