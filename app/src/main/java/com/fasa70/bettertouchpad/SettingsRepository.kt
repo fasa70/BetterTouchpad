@@ -56,8 +56,8 @@ data class TouchpadSettings(
 
     // Two-finger top swipe (notification center / control center)
     val twoFingerTopSwipe: Boolean = true,
-    val topEdgeZoneRatio: Float = 0.25f,
-    val topEdgeThreshold: Float = 0.1f
+    val topEdgeZoneRatio: Float = 0.15f,
+    val topEdgeThreshold: Float = 0.05f
 )
 
 class SettingsRepository(context: Context) {

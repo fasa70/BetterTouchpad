@@ -207,7 +207,7 @@ fun TouchSettingsTab(repo: SettingsRepository) {
         SensitivityRow(
             label = "顶部手势触发区域宽度 (占X轴比例)",
             value = settings.topEdgeZoneRatio,
-            range = 0.1f..0.50f,
+            range = 0.01f..0.50f,
             onValueChange = { repo.update { copy(topEdgeZoneRatio = it) } },
             onDone = { focusManager.clearFocus() }
         )
