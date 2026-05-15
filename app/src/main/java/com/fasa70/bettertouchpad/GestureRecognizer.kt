@@ -86,12 +86,9 @@ class GestureRecognizer(
     private var topSwipeTouchInjected = false
 
     // Two-finger bottom swipe state
-    private var bottomSwipeSide = false  // true = right (前进), false = left (后退)
-    private var bottomSwipeTrackingId = 0
-    private var bottomSwipeDispX = 0      // anchor screen X
-    private var bottomSwipeDispY = 0      // anchor screen Y
-    private var bottomSwipeStartPadY = 0  // pad Y at gesture start
-    private var bottomSwipeTouchInjected = false
+    private var bottomSwipeSide = false     // true = right (前进), false = left (后退)
+    private var bottomSwipeStartPadY = 0    // pad Y at gesture start
+    private var bottomSwipeFired = false    // whether side button has been fired
 
     // Two-finger transition state
     private var transitionStartTime = 0L
@@ -202,7 +199,6 @@ class GestureRecognizer(
                     }
 
                     GestureState.BOTTOM_SWIPE -> {
-                        NativeBridge.releaseAllTouches(touchFd, 1)
                         state = GestureState.IDLE
                     }
 
@@ -450,29 +446,16 @@ class GestureRecognizer(
                     }
 
                     GestureState.BOTTOM_SWIPE -> {
-                        if (p0.active && p1.active && s.twoFingerBottomSwipe) {
+                        if (p0.active && p1.active && s.twoFingerBottomSwipe && !bottomSwipeFired) {
                             val avgPadY = (c0.y + c1.y) / 2
                             val deltaY = avgPadY - bottomSwipeStartPadY
 
-                            // Bottom swipe: finger moves upward (deltaY < 0)
                             if (deltaY <= -10) {
-                                val uinputW = if (s.swapAxes) screenHeight else screenWidth
-                                val uinputH = if (s.swapAxes) screenWidth else screenHeight
-
-                                // Compute display coordinates, upward from bottom of screen
-                                val ratio = (-deltaY).toFloat() / s.padMaxY
-                                var dispY = (screenHeight - 1 - (ratio * screenHeight).toInt()).coerceIn(0, screenHeight - 1)
-                                if (s.invertY) dispY = screenHeight - 1 - dispY
-                                var dispX = bottomSwipeDispX
-                                if (s.invertX) dispX = screenWidth - 1 - dispX
-
-                                // Convert display (screen) -> uinput coordinates
-                                val touchX = if (!s.swapAxes) dispX else dispY.coerceIn(0, uinputW - 1)
-                                val touchY = if (!s.swapAxes) dispY.coerceIn(0, uinputH - 1) else dispX.coerceIn(0, uinputH - 1)
-
-                                val pts = intArrayOf(0, touchX, touchY, bottomSwipeTrackingId)
-                                NativeBridge.injectTouch(touchFd, pts, 1)
-                                bottomSwipeTouchInjected = true
+                                val btn = if (bottomSwipeSide) BTN_EXTRA else BTN_SIDE
+                                NativeBridge.sendMouseButton(mouseFd, btn, true)
+                                Thread.sleep(16)
+                                NativeBridge.sendMouseButton(mouseFd, btn, false)
+                                bottomSwipeFired = true
                             }
                         }
                     }
@@ -593,7 +576,6 @@ class GestureRecognizer(
             }
 
             GestureState.BOTTOM_SWIPE -> {
-                NativeBridge.releaseAllTouches(touchFd, 1)
             }
 
             GestureState.THREE_FINGER -> {
@@ -789,9 +771,9 @@ class GestureRecognizer(
             val inRight = c0.x >= s.padMaxX - zonePx || c1.x >= s.padMaxX - zonePx
 
             if (inLeft) {
-                startBottomSwipe(c0, c1, false, s)
+                startBottomSwipe(c0, c1, false, s, now)
             } else if (inRight) {
-                startBottomSwipe(c0, c1, true, s)
+                startBottomSwipe(c0, c1, true, s, now)
             } else {
                 state = GestureState.TWO_FINGER_TRANSITION
                 transitionStartTime = now
@@ -802,20 +784,10 @@ class GestureRecognizer(
         }
     }
 
-    private fun startBottomSwipe(c0: SlotSnapshot, c1: SlotSnapshot, isRight: Boolean, s: TouchpadSettings) {
-        nextTid++
-        bottomSwipeTrackingId = nextTid
+    private fun startBottomSwipe(c0: SlotSnapshot, c1: SlotSnapshot, isRight: Boolean, s: TouchpadSettings, now: Long) {
         bottomSwipeSide = isRight
         bottomSwipeStartPadY = (c0.y + c1.y) / 2
-
-        // Fire mouse side button immediately on gesture start
-        val btn = if (isRight) BTN_EXTRA else BTN_SIDE
-        NativeBridge.sendMouseButton(mouseFd, btn, true)
-
-        // Injection anchor in screen coordinates: (10, screenHeight-1) for left, (screenWidth-11, screenHeight-1) for right
-        bottomSwipeDispX = if (isRight) screenWidth - 11 else 10
-        bottomSwipeDispY = screenHeight - 1
-        bottomSwipeTouchInjected = false
+        bottomSwipeFired = false
 
         state = GestureState.BOTTOM_SWIPE
     }
