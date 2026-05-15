@@ -18,9 +18,10 @@ private const val TAP_MAX_MS         = 280L
 private const val TAP_MAX_MOVE_PX    = 180
 private const val THREE_FINGER_DELAY_MS = 100L
 private const val THREE_FINGER_MOVE_THRESHOLD_PX = 40
+private const val TRANSITION_TIMEOUT_MS = 100L
 
 private enum class GestureState {
-    IDLE, SINGLE_MOVING, DRAG, SCROLL, EDGE_SWIPE, THREE_FINGER, PINCH_ZOOM, TOP_SWIPE, BOTTOM_SWIPE
+    IDLE, SINGLE_MOVING, DRAG, SCROLL, EDGE_SWIPE, THREE_FINGER, PINCH_ZOOM, TOP_SWIPE, BOTTOM_SWIPE, TWO_FINGER_TRANSITION
 }
 
 class GestureRecognizer(
@@ -91,6 +92,9 @@ class GestureRecognizer(
     private var bottomSwipeDispY = 0      // anchor screen Y
     private var bottomSwipeStartPadY = 0  // pad Y at gesture start
     private var bottomSwipeTouchInjected = false
+
+    // Two-finger transition state
+    private var transitionStartTime = 0L
 
     private enum class ThreeFingerFinalizeReason {
         FINGER_DROP,
@@ -165,7 +169,8 @@ class GestureRecognizer(
                         }
                     }
 
-                    GestureState.SCROLL -> {
+                    GestureState.SCROLL,
+                    GestureState.TWO_FINGER_TRANSITION -> {
                         // One finger lifted while in SCROLL — check for two-finger tap
                         if (s.twoFingerTap) {
                             val duration = now - downTimeMs
@@ -294,74 +299,85 @@ class GestureRecognizer(
                                 } else if (inRight) {
                                     startTopSwipe(c0, c1, true, s)
                                 } else {
-                                    state = GestureState.SCROLL
+                                    state = GestureState.TWO_FINGER_TRANSITION
+                                    transitionStartTime = now
                                 }
                             } else {
-                                tryBottomSwipe(c0, c1, s)
+                                tryBottomSwipe(c0, c1, s, now)
                             }
                         } else if (s.twoFingerBottomSwipe) {
-                            tryBottomSwipe(c0, c1, s)
+                            tryBottomSwipe(c0, c1, s, now)
                         } else {
-                            state = GestureState.SCROLL
+                            state = GestureState.TWO_FINGER_TRANSITION
+                            transitionStartTime = now
                         }
                     }
 
                     GestureState.SCROLL -> {
+                        if (p0.active && p1.active && s.twoFingerScroll) {
+                            val avgDy = ((c0.y - p0.y) + (c1.y - p1.y)) / 2f
+                            val avgDx = ((c0.x - p0.x) + (c1.x - p1.x)) / 2f
+                            val hiResScale = s.scrollSensitivity * 3f
+                            val sign = if (s.naturalScroll) 1f else -1f
+                            scrollAccV += avgDy * hiResScale * sign
+                            scrollAccH += avgDx * hiResScale * sign
+
+                            val hiV = scrollAccV.toInt(); scrollAccV -= hiV
+                            val hiH = scrollAccH.toInt(); scrollAccH -= hiH
+                            if (hiV != 0 || hiH != 0) {
+                                NativeBridge.sendWheelHiRes(mouseFd, hiV, hiH)
+                            }
+                        }
+                    }
+
+                    GestureState.TWO_FINGER_TRANSITION -> {
                         if (p0.active && p1.active) {
-                            // Check for pinch-to-zoom
-                            if (s.twoFingerZoom) {
-                                val currentDist = sqrt(
-                                    (c0.x - c1.x).toDouble().let { it * it } +
-                                        (c0.y - c1.y).toDouble().let { it * it }
-                                ).toFloat()
-                                val initialDist = sqrt(
-                                    (startSlots[ai[0]].x - startSlots[ai[1]].x).toDouble()
-                                        .let { it * it } +
-                                        (startSlots[ai[0]].y - startSlots[ai[1]].y).toDouble()
-                                            .let { it * it }
-                                ).toFloat()
+                            val currentDist = sqrt(
+                                (c0.x - c1.x).toDouble().let { it * it } +
+                                    (c0.y - c1.y).toDouble().let { it * it }
+                            ).toFloat()
+                            val initialDist = sqrt(
+                                (startSlots[ai[0]].x - startSlots[ai[1]].x).toDouble()
+                                    .let { it * it } +
+                                    (startSlots[ai[0]].y - startSlots[ai[1]].y).toDouble()
+                                        .let { it * it }
+                            ).toFloat()
 
-                                val dx0 = c0.x - startSlots[ai[0]].x
-                                val dy0 = c0.y - startSlots[ai[0]].y
-                                val dx1 = c1.x - startSlots[ai[1]].x
-                                val dy1 = c1.y - startSlots[ai[1]].y
-                                val avgDx = (dx0 + dx1) / 2f
-                                val avgDy = (dy0 + dy1) / 2f
-                                val moveDelta = sqrt(avgDx * avgDx + avgDy * avgDy)
-                                val distanceDelta = abs(currentDist - initialDist)
+                            val dx0 = c0.x - startSlots[ai[0]].x
+                            val dy0 = c0.y - startSlots[ai[0]].y
+                            val dx1 = c1.x - startSlots[ai[1]].x
+                            val dy1 = c1.y - startSlots[ai[1]].y
+                            val avgDx = (dx0 + dx1) / 2f
+                            val avgDy = (dy0 + dy1) / 2f
+                            val moveDelta = sqrt(avgDx * avgDx + avgDy * avgDy)
+                            val distanceDelta = abs(currentDist - initialDist)
 
-                                // Finger movement direction: dot product of per-frame displacements
-                                val fdx0 = c0.x - p0.x
-                                val fdy0 = c0.y - p0.y
-                                val fdx1 = c1.x - p1.x
-                                val fdy1 = c1.y - p1.y
-                                val dotProduct = fdx0 * fdx1 + fdy0 * fdy1
-                                val isOpposing = dotProduct < 0
+                            val fdx0 = c0.x - p0.x
+                            val fdy0 = c0.y - p0.y
+                            val fdx1 = c1.x - p1.x
+                            val fdy1 = c1.y - p1.y
+                            val dotProduct = fdx0 * fdx1 + fdy0 * fdy1
+                            val isOpposing = dotProduct < 0
 
-                                if (isOpposing && distanceDelta > s.minPinchDistance && distanceDelta / max(moveDelta, 1.0f) > s.zoomSensitivity) {
-                                    enterPinchZoom(c0, c1, initialDist, s)
-                                    pinchCurrentPadX0 = c0.x; pinchCurrentPadY0 = c0.y
-                                    pinchCurrentPadX1 = c1.x; pinchCurrentPadY1 = c1.y
-                                    injectPinchTouch(s)
-                                    // Skip scroll for this frame
-                                    for (i in cur.indices) prevSlots[i] = cur[i]
-                                    return@onFrame
-                                }
+                            if (s.twoFingerZoom && isOpposing && distanceDelta > s.minPinchDistance && distanceDelta / max(moveDelta, 1.0f) > s.zoomSensitivity) {
+                                enterPinchZoom(c0, c1, initialDist, s)
+                                pinchCurrentPadX0 = c0.x; pinchCurrentPadY0 = c0.y
+                                pinchCurrentPadX1 = c1.x; pinchCurrentPadY1 = c1.y
+                                injectPinchTouch(s)
+                                for (i in cur.indices) prevSlots[i] = cur[i]
+                                return@onFrame
                             }
 
-                            // Normal scroll handling
-                            if (s.twoFingerScroll) {
-                                val avgDy = ((c0.y - p0.y) + (c1.y - p1.y)) / 2f
-                                val avgDx = ((c0.x - p0.x) + (c1.x - p1.x)) / 2f
-                                val hiResScale = s.scrollSensitivity * 3f
-                                val sign = if (s.naturalScroll) 1f else -1f
-                                scrollAccV += avgDy * hiResScale * sign
-                                scrollAccH += avgDx * hiResScale * sign
-
-                                val hiV = scrollAccV.toInt(); scrollAccV -= hiV
-                                val hiH = scrollAccH.toInt(); scrollAccH -= hiH
-                                if (hiV != 0 || hiH != 0) {
-                                    NativeBridge.sendWheelHiRes(mouseFd, hiV, hiH)
+                            if (now - transitionStartTime >= TRANSITION_TIMEOUT_MS) {
+                                state = GestureState.SCROLL
+                                if (s.twoFingerScroll) {
+                                    scrollAccV = 0f; scrollAccH = 0f
+                                    val avgDy2 = ((c0.y - p0.y) + (c1.y - p1.y)) / 2f
+                                    val avgDx2 = ((c0.x - p0.x) + (c1.x - p1.x)) / 2f
+                                    val hiResScale = s.scrollSensitivity * 3f
+                                    val sign = if (s.naturalScroll) 1f else -1f
+                                    scrollAccV += avgDy2 * hiResScale * sign
+                                    scrollAccH += avgDx2 * hiResScale * sign
                                 }
                             }
                         }
@@ -475,7 +491,8 @@ class GestureRecognizer(
                     GestureState.DRAG,
                     GestureState.SCROLL,
                     GestureState.EDGE_SWIPE,
-                    GestureState.PINCH_ZOOM -> {
+                    GestureState.PINCH_ZOOM,
+                    GestureState.TWO_FINGER_TRANSITION -> {
                         enterThreeFingerGesture(cur, ai, now, s)
                     }
 
@@ -762,7 +779,7 @@ class GestureRecognizer(
         state = GestureState.TOP_SWIPE
     }
 
-    private fun tryBottomSwipe(c0: SlotSnapshot, c1: SlotSnapshot, s: TouchpadSettings) {
+    private fun tryBottomSwipe(c0: SlotSnapshot, c1: SlotSnapshot, s: TouchpadSettings, now: Long) {
         val bottomPx = (s.padMaxY * (1f - s.bottomEdgeThreshold)).toInt()
         val oneInBottom = c0.y > bottomPx || c1.y > bottomPx
 
@@ -776,10 +793,12 @@ class GestureRecognizer(
             } else if (inRight) {
                 startBottomSwipe(c0, c1, true, s)
             } else {
-                state = GestureState.SCROLL
+                state = GestureState.TWO_FINGER_TRANSITION
+                transitionStartTime = now
             }
         } else {
-            state = GestureState.SCROLL
+            state = GestureState.TWO_FINGER_TRANSITION
+            transitionStartTime = now
         }
     }
 
