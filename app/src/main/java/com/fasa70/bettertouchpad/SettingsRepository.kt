@@ -62,7 +62,10 @@ data class TouchpadSettings(
     // Two-finger bottom swipe (mouse back/forward)
     val twoFingerBottomSwipe: Boolean = true,
     val bottomEdgeZoneRatio: Float = 0.15f,
-    val bottomEdgeThreshold: Float = 0.05f
+    val bottomEdgeThreshold: Float = 0.05f,
+
+    // SELinux enforcing mode control
+    val seLinuxEnforce: Boolean = true
 )
 
 class SettingsRepository(context: Context) {
@@ -117,7 +120,10 @@ class SettingsRepository(context: Context) {
         topEdgeThreshold    = prefs.getFloat("topEdgeThreshold", 0.1f),
         twoFingerBottomSwipe = prefs.getBoolean("twoFingerBottomSwipe", true),
         bottomEdgeZoneRatio = prefs.getFloat("bottomEdgeZoneRatio", 0.25f),
-        bottomEdgeThreshold = prefs.getFloat("bottomEdgeThreshold", 0.1f)
+        bottomEdgeThreshold = prefs.getFloat("bottomEdgeThreshold", 0.1f),
+
+        // SELinux enforcing mode
+        seLinuxEnforce = prefs.getBoolean("seLinuxEnforce", true)
     )
 
     private fun save(s: TouchpadSettings) {
@@ -156,6 +162,9 @@ class SettingsRepository(context: Context) {
             putBoolean("twoFingerBottomSwipe", s.twoFingerBottomSwipe)
             putFloat("bottomEdgeZoneRatio", s.bottomEdgeZoneRatio)
             putFloat("bottomEdgeThreshold", s.bottomEdgeThreshold)
+
+            // SELinux enforcing mode
+            putBoolean("seLinuxEnforce", s.seLinuxEnforce)
         }.apply()
     }
 }

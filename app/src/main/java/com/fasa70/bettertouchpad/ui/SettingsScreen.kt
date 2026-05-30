@@ -289,6 +289,16 @@ fun CompatibilitySettingsTab(repo: SettingsRepository) {
             modifier = Modifier.padding(bottom = 4.dp)
         )
 
+        FeatureSwitch("自动宽容 SELinux（setenforce 0）", settings.seLinuxEnforce) {
+            repo.update { copy(seLinuxEnforce = it) }
+        }
+        Text(
+            "开启后，应用在无法通过 root helper 获取 fd 时将尝试设置 SELinux 为宽容模式以确保设备访问正常。\n如设备访问无问题可关闭此选项减少安全风险。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+
         FeatureSwitch("自动匹配触控板设备路径和坐标值范围", settings.autoDetectDevice) {
             repo.update { copy(autoDetectDevice = it) }
         }

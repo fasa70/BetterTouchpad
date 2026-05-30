@@ -148,11 +148,14 @@ class TouchpadService : Service() {
                 // Step 2: Fallback — chmod and open directly
                 if (!fdObtainedViaHelper) {
                     Log.i(TAG, "Trying direct open with chmod")
+                    val enforcedModeCommand = if (settings.get().seLinuxEnforce) {
+                        "chcon u:object_r:input_device:s0 $evdevPath 2>/dev/null; " +
+                        "setenforce 0 2>/dev/null; "
+                    } else ""
                     runShellAsRoot(
                         "chmod 666 $evdevPath; " +
                         "chmod 666 /dev/uinput; " +
-                        "chcon u:object_r:input_device:s0 $evdevPath 2>/dev/null; " +
-                        "setenforce 0 2>/dev/null; " +
+                        enforcedModeCommand +
                         "echo DONE"
                     )
                     kotlinx.coroutines.delay(400)
