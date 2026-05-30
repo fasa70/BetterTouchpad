@@ -65,7 +65,8 @@ data class TouchpadSettings(
     val bottomEdgeThreshold: Float = 0.05f,
 
     // SELinux enforcing mode control
-    val seLinuxEnforce: Boolean = true
+    val seLinuxEnforce: Boolean = true,
+    val setenforceOneAfterStart: Boolean = false
 )
 
 class SettingsRepository(context: Context) {
@@ -123,7 +124,8 @@ class SettingsRepository(context: Context) {
         bottomEdgeThreshold = prefs.getFloat("bottomEdgeThreshold", 0.1f),
 
         // SELinux enforcing mode
-        seLinuxEnforce = prefs.getBoolean("seLinuxEnforce", true)
+        seLinuxEnforce = prefs.getBoolean("seLinuxEnforce", true),
+        setenforceOneAfterStart = prefs.getBoolean("setenforceOneAfterStart", false)
     )
 
     private fun save(s: TouchpadSettings) {
@@ -165,6 +167,7 @@ class SettingsRepository(context: Context) {
 
             // SELinux enforcing mode
             putBoolean("seLinuxEnforce", s.seLinuxEnforce)
+            putBoolean("setenforceOneAfterStart", s.setenforceOneAfterStart)
         }.apply()
     }
 }

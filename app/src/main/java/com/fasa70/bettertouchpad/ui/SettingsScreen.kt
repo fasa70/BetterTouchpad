@@ -299,6 +299,16 @@ fun CompatibilitySettingsTab(repo: SettingsRepository) {
             modifier = Modifier.padding(bottom = 4.dp)
         )
 
+        FeatureSwitch("启动后两秒执行 setenforce 1（强制模式）", settings.setenforceOneAfterStart) {
+            repo.update { copy(setenforceOneAfterStart = it) }
+        }
+        Text(
+            "开启后，在触控板服务启动约2秒后将 SELinux 设为强制模式，增强系统安全性。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+
         FeatureSwitch("自动匹配触控板设备路径和坐标值范围", settings.autoDetectDevice) {
             repo.update { copy(autoDetectDevice = it) }
         }

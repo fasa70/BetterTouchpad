@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -238,6 +239,15 @@ class TouchpadService : Service() {
             } finally {
                 isRunning = false
                 cleanup()
+            }
+        }
+
+        // If "setenforceOneAfterStart" enabled, delay 2s then enforce SELinux
+        if (settings.get().setenforceOneAfterStart) {
+            scope.launch {
+                delay(2000)
+                runShellAsRoot("setenforce 1 2>/dev/null")
+                Log.i(TAG, "setenforce 1 executed after 2s delay (setenforceOneAfterStart enabled)")
             }
         }
     }
