@@ -278,6 +278,27 @@ fun CompatibilitySettingsTab(repo: SettingsRepository) {
             repo.update { copy(invertY = it) }
         }
 
+        SectionTitle("SELinux 相关设置")
+        FeatureSwitch("自动宽容 SELinux", settings.seLinuxEnforce) {
+            repo.update { copy(seLinuxEnforce = it) }
+        }
+        Text(
+            "开启后，程序会在启动时尝试将 SELinux 设置为宽容模式，以确保应用正常运行。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+
+        FeatureSwitch("自动将 SELinux 设置为强制模式", settings.setenforceOneAfterStart) {
+            repo.update { copy(setenforceOneAfterStart = it) }
+        }
+        Text(
+            "开启后，在程序启动2秒后，将 SELinux 设为强制模式，以便于隐藏root环境",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+
         SectionTitle("兼容性设置")
         FeatureSwitch("独占设备 (EVIOCGRAB)", settings.exclusiveGrab) {
             repo.update { copy(exclusiveGrab = it) }
@@ -289,31 +310,11 @@ fun CompatibilitySettingsTab(repo: SettingsRepository) {
             modifier = Modifier.padding(bottom = 4.dp)
         )
 
-        FeatureSwitch("自动宽容 SELinux（setenforce 0）", settings.seLinuxEnforce) {
-            repo.update { copy(seLinuxEnforce = it) }
-        }
-        Text(
-            "开启后，应用在无法通过 root helper 获取 fd 时将尝试设置 SELinux 为宽容模式以确保设备访问正常。\n如设备访问无问题可关闭此选项减少安全风险。",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-
-        FeatureSwitch("启动后两秒执行 setenforce 1（强制模式）", settings.setenforceOneAfterStart) {
-            repo.update { copy(setenforceOneAfterStart = it) }
-        }
-        Text(
-            "开启后，在触控板服务启动约2秒后将 SELinux 设为强制模式，增强系统安全性。",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-
         FeatureSwitch("自动匹配触控板设备路径和坐标值范围", settings.autoDetectDevice) {
             repo.update { copy(autoDetectDevice = it) }
         }
         Text(
-            "开启后，程序启动时自动获取触控板设备路径及坐标最大值\n如程序未能正常运行，可尝试关闭此选项",
+            "开启后，程序启动时自动获取触控板设备路径及坐标最大值",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)

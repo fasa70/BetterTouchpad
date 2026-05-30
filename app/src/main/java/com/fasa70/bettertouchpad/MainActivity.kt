@@ -33,9 +33,9 @@ class MainActivity : ComponentActivity() {
 private fun MainScreen(repo: SettingsRepository) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf(
-        TabInfo("手势", Icons.Default.Star),
-        TabInfo("触控", Icons.Default.Refresh),
-        TabInfo("兼容", Icons.Default.Settings),
+        TabInfo("手势开关", Icons.Default.Star),
+        TabInfo("触控调节", Icons.Default.Refresh),
+        TabInfo("高级设置", Icons.Default.Settings),
         TabInfo("关于", Icons.Default.Info)
     )
 
